@@ -324,6 +324,9 @@ var PlayableMusic = function(data) {
     this.minBPM = Infinity;
     this.maxBPM = 0;
     this.timeFrames = []; // objects
+    this.composer = data.composer || "";
+    this.arranger = data.arranger || "";
+    this.transcriber = data.transcriber || "";
     var mapping = data.noteMapping; // hashtable
     var stack = []; // an array repurposed as stack
     var EPSILON = 0.5; // honestly, anything less than a 0.5 millisecond difference doesn't matter much. We can't even show the difference for <1 ms.
@@ -491,10 +494,10 @@ var PlayableMusic = function(data) {
 };
 /**
  * With the help of a manager, play the music at a certain time.
- * @param {Number} time what time to start at
  * @param {MusicPlayer} manager
  */
-PlayableMusic.prototype.play = function(time, manager) {
+PlayableMusic.prototype.play = function(manager) {
+    var time = manager.getTime();
     var low = 0, high = this.timeFrames.length;
     while (low+1<high) {
         var mid = Math.floor((low+high)/2);
@@ -507,6 +510,7 @@ PlayableMusic.prototype.play = function(time, manager) {
             high = mid+1;
         }
     }
+    manager.playingFrame = low;
     // start notes
     if (low<this.timeFrames.length) {
         for (var i=0;i<this.timeFrames[low].onNotes.length;i++) {
@@ -517,8 +521,9 @@ PlayableMusic.prototype.play = function(time, manager) {
         }
         if (low+1<this.timeFrames.length) {
             manager.currentTimeout = setTimeout(function() {
-                this.playFrame(low+1, manager);
-            }.bind(this), this.timeFrames[low+1].millis-time);
+                manager.playingFrame++;
+                this.playFrame(manager);
+            }.bind(this), Math.max(this.timeFrames[low+1].millis-time, 0));
         } else {
             manager.endSong(); // music tells manager to stop
         }
@@ -529,46 +534,37 @@ PlayableMusic.prototype.play = function(time, manager) {
 /**
  * With the help of a manager, play the music at a certain frame.
  * This should not be normally called.
- * @param {Number} frame what frame to start at
  * @param {MusicPlayer} manager
  */
-PlayableMusic.prototype.playFrame = function(frame, manager) {
+PlayableMusic.prototype.playFrame = function(manager) {
+    var frame = manager.playingFrame; // get the actual frame
+    var time = manager.getTime();
     for (var i=0;i<this.timeFrames[frame].onNotes.length;i++) {
-        this.timeFrames[frame].onNotes[i].start(manager.audioContext, manager.volumeNode);
+        this.timeFrames[frame].onNotes[i].startAt(manager.audioContext, manager.volumeNode, time);
     }
     if (frame+1<this.timeFrames.length) {
         manager.currentTimeout = setTimeout(function() {
-            this.playFrame(frame+1, manager);
-        }.bind(this), this.timeFrames[frame+1].millis-this.timeFrames[frame].millis);
+            manager.playingFrame++;
+            this.playFrame(manager);
+        }.bind(this), Math.max(this.timeFrames[frame+1].millis-time, 0));
     } else {
         manager.endSong(); // music tells manager to stop
     }
 };
 /**
- * With the help of a manager, stop the music at a certain time.
- * @param {Number} time what time to stop at (useful hint)
+ * With the help of a manager, stop the music now.
  * @param {MusicPlayer} manager
  */
-PlayableMusic.prototype.stop = function(time, manager) {
-    var low = 0, high = this.timeFrames.length;
-    while (low+1<high) {
-        var mid = Math.floor((low+high)/2);
-        if (this.timeFrames[mid].millis > time) {
-            high = mid;
-        } else if (this.timeFrames[mid].millis < time) {
-            low = mid;
-        } else {
-            low = mid;
-            high = mid+1;
-        }
-    }
-    if (low<this.timeFrames.length) {
+PlayableMusic.prototype.stop = function(manager) {
+    clearTimeout(manager.currentTimeout); // should be responsible for it.
+    var frame = manager.playingFrame; // the frame used
+    if (frame<this.timeFrames.length) {
         // stop everything
-        for (var i=0;i<this.timeFrames[low].onNotes.length;i++) {
-            this.timeFrames[low].onNotes[i].stop();
+        for (var i=0;i<this.timeFrames[frame].onNotes.length;i++) {
+            this.timeFrames[frame].onNotes[i].stop();
         }
-        for (var i=0;i<this.timeFrames[low].sustainNotes.length;i++) {
-            this.timeFrames[low].sustainNotes[i].stop();
+        for (var i=0;i<this.timeFrames[frame].sustainNotes.length;i++) {
+            this.timeFrames[frame].sustainNotes[i].stop();
         }
     }
 };
@@ -588,6 +584,7 @@ var MusicPlayer = function(songData) {
     this.audioContext = null;
     this.loop = false;
     this.volume = 1; // volume multiplier
+    this.playingFrame = 0;
 };
 /**
  * Set if the song should loop
@@ -599,7 +596,7 @@ MusicPlayer.prototype.setLoop = function(loop) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = 1.3; // storing version number for version control
+MusicPlayer.version = 1.4; // storing version number for version control
 
 /**
  * Plays the selected song at time this.time.
@@ -617,7 +614,7 @@ MusicPlayer.prototype.play = function() {
             this.time = 0;
         }
         this.startTime = new Date().getTime();
-        this.data[this.songIndex].play(this.time, this);
+        this.data[this.songIndex].play(this);
     }
 };
 /**
@@ -658,9 +655,8 @@ MusicPlayer.prototype.endSong = function() {
 MusicPlayer.prototype.pause = function() {
     if (this.playing) {
         this.playing = false;
-        clearTimeout(this.currentTimeout);
         this.time += new Date().getTime()-this.startTime;
-        this.data[this.songIndex].stop(this.time);
+        this.data[this.songIndex].stop(this); // this helps it stop
         AudioContextManager.releaseAudioContext();
         this.audioContext = null;
     }
@@ -723,7 +719,9 @@ MusicPlayer.prototype.getCurrentSongData = function() {
     if (this.songIndex === -1) {
         return {
             title: "",
-            artist: null,
+            composer: "",
+            arranger: "",
+            transcriber: "",
             duration: 0, // seconds
             bpm: {
                 min: 0,
@@ -734,7 +732,9 @@ MusicPlayer.prototype.getCurrentSongData = function() {
     }
     return {
         title: this.data[this.songIndex].title,
-        artist: null,
+        composer: this.data[this.songIndex].composer,
+        arranger: this.data[this.songIndex].arranger,
+        transcriber: this.data[this.songIndex].transcriber,
         duration: this.data[this.songIndex].length/1000, // seconds
         bpm: {
             min: this.data[this.songIndex].minBPM,
@@ -742,6 +742,14 @@ MusicPlayer.prototype.getCurrentSongData = function() {
         },
         year: 0
     };
+};
+/**
+ * Get the current time of the song. Used to calibrate PlayableMusic.
+ * @return {Object} data
+ */
+MusicPlayer.prototype.getTime = function() {
+    // Much oblivious
+    return this.time + new Date().getTime() - this.startTime;
 };
 /**
  * Get the data of the current playing song.
@@ -770,19 +778,3 @@ MusicPlayer.prototype.getCurrentPlayingData = function() {
 MusicPlayer.prototype.toString = function() {
     return "";
 };
-var module = {
-    Priority_Queue: Priority_Queue,
-    AudioContextManager: AudioContextManager,
-    PlayableNote: PlayableNote,
-    PlayableMusic: PlayableMusic,
-    MusicPlayer: MusicPlayer
-};
-/**
- * @hidden
- * Used to export modules for this:
- * https://www.khanacademy.org/computer-programming/bens-module-system/4728010161913856?qa_expand_key=ag5zfmtoYW4tYWNhZGVteXJpCxIIVXNlckRhdGEiRnVzZXJfaWRfa2V5X2h0dHA6Ly9pZC5raGFuYWNhZGVteS5vcmcvMzY5YWZiZDA0YTc5NGQ0OGJiODQyNDVlM2IyNmI5NDAMCxIIRmVlZGJhY2sYgICAwP-tngoM
- */
-var export_module;
-if (export_module) {
-    export_module(module);
-}
