@@ -583,6 +583,7 @@ var MusicPlayer = function(songData) {
     this.currentTimeout = undefined;
     this.audioContext = null;
     this.loop = false;
+    this.playAll = false;
     this.volume = 1; // volume multiplier
     this.playingFrame = 0;
 };
@@ -594,9 +595,16 @@ MusicPlayer.prototype.setLoop = function(loop) {
     this.loop = !!loop; // cast to boolean for the rebels
 };
 /**
+ * Set if this should play all the songs.
+ * @param {Boolean} playAll
+ */
+MusicPlayer.prototype.setPlayAll = function(playAll) {
+    this.playAll = !!playAll;
+};
+/**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = 1.4; // storing version number for version control
+MusicPlayer.version = 1.5; // storing version number for version control
 
 /**
  * Plays the selected song at time this.time.
@@ -642,7 +650,13 @@ MusicPlayer.prototype.endSong = function() {
         this.playing = false;
         this.startTime = new Date().getTime();
         this.time = this.data[this.songIndex].length;
-        if (this.loop) {
+        if (this.playAll) {
+            this.songIndex++;
+            if (this.songIndex === this.data.length) {
+                this.songIndex = this.loop?0:-1;
+            }
+            this.play();
+        } else if (this.loop) {
             this.play(); // loop!
         }
     }
@@ -692,6 +706,38 @@ MusicPlayer.prototype.select = function(selector) {
         }
     }
     this.time = 0;
+};
+/**
+ * Naively shuffles all the songs
+ * Use only if you want a real random shuffle.
+ */
+MusicPlayer.prototype.naiveShuffle = function() {
+    for (var i = this.data.length;i>=1;i--) {
+        var index = Math.floor(Math.random() * i);
+        var temp = this.data[index];
+        this.data[index] = this.data[i-1];
+        this.data[i-1] = temp;
+    }
+};
+/**
+ * Sorts the songs based off a function
+ * @param {sortFunc} a function to sort by.
+ */
+MusicPlayer.prototype.sort = function(sortFunc) {
+    this.data.sort(sortFunc);
+};
+/**
+ * Smartly shuffles all the songs
+ * Used when you hate naive shuffles.
+ * Not implemented yet.
+ */
+MusicPlayer.prototype.smartShuffle = function() {
+    throw {
+        message: "MusicPlayer.prototype.smartShuffle not implemented yet",
+        toString: function() {
+            return this.message;
+        }
+    };
 };
 /**
  * Get the titles of all the songs.
@@ -778,3 +824,19 @@ MusicPlayer.prototype.getCurrentPlayingData = function() {
 MusicPlayer.prototype.toString = function() {
     return "";
 };
+var module = {
+    Priority_Queue: Priority_Queue,
+    AudioContextManager: AudioContextManager,
+    PlayableNote: PlayableNote,
+    PlayableMusic: PlayableMusic,
+    MusicPlayer: MusicPlayer
+};
+/**
+ * @hidden
+ * Used to export modules for this:
+ * https://www.khanacademy.org/computer-programming/bens-module-system/4728010161913856?qa_expand_key=ag5zfmtoYW4tYWNhZGVteXJpCxIIVXNlckRhdGEiRnVzZXJfaWRfa2V5X2h0dHA6Ly9pZC5raGFuYWNhZGVteS5vcmcvMzY5YWZiZDA0YTc5NGQ0OGJiODQyNDVlM2IyNmI5NDAMCxIIRmVlZGJhY2sYgICAwP-tngoM
+ */
+var export_module;
+if (export_module) {
+    export_module(module);
+}
