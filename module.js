@@ -223,7 +223,10 @@ var PlayableNote = function(config) {
         this.type = "custom";
     }
     this.length = config.length; // in milliseconds
-    this.volume = config.volume || 1; // 0: no sound, 1: loud (Not sure if can be louder)
+    this.volume = config.volume; // 0: no sound, 1: loud (Not sure if can be louder)
+    if (typeof this.volume !== "number") {
+        this.volume = 1;
+    }
     this.oscillator = null;
 };
 /**
@@ -328,6 +331,8 @@ var PlayableMusic = function(data) {
     this.arranger = data.arranger || "";
     this.transcriber = data.transcriber || "";
     var mapping = data.noteMapping; // hashtable
+    var volumeChar = (data.volume && data.volume.characters) || {};
+    var volumeMap = (data.volume && data.volume.mapping) || {};
     var stack = []; // an array repurposed as stack
     var EPSILON = 0.5; // honestly, anything less than a 0.5 millisecond difference doesn't matter much. We can't even show the difference for <1 ms.
     var timeFrameIndex = 0; // a number index pointer
@@ -340,11 +345,13 @@ var PlayableMusic = function(data) {
             stringPointer: 0,
             millis: 0,
             bpm: 0,
+            // 0 is default volume
+            // volume exists outside the stack
+            volume: 0,
             parseState: "bpm entry",
             modifierStack: [{
                 timeMultiplier: 1,
                 octaveChange: 0,
-                volume: 1
             }],
         });
     }
@@ -353,6 +360,7 @@ var PlayableMusic = function(data) {
     }, initPQ);
     // array to store sustained notes.
     var sustainedArray = [];
+    var lastSustained = -1;
     while (!pq.empty()) {
         var x = pq.top(); pq.pop();
         if (this.timeFrames.length === 0 || Math.abs(this.timeFrames.back().millis-x.millis)>EPSILON) {
@@ -367,29 +375,35 @@ var PlayableMusic = function(data) {
         // time frame exists.
         // check the sustained array
         // delete elements past the time.
-        var replaceSus = [];
-        var susNotes = this.timeFrames.back().sustainNotes;
-        for (var i=0;i<sustainedArray.length;i++) {
-            // add to the sustain notes
-            if (Math.abs(sustainedArray[i].startTime+sustainedArray[i].length-this.timeFrames.back().millis)<EPSILON) {
-                this.timeFrames.back().offNotes.push(sustainedArray[i]);
-            } else {
-                susNotes.push(sustainedArray[i]);
-                // check if should add to the next batch
-                if (this.timeFrames.back().millis+EPSILON<sustainedArray[i].startTime+sustainedArray[i].length) {
-                    replaceSus.push(sustainedArray[i]);
+        if (lastSustained<this.timeFrames.back().millis) {
+            lastSustained = this.timeFrames.back().millis;
+            var replaceSus = [];
+            var susNotes = this.timeFrames.back().sustainNotes;
+            for (var i=0;i<sustainedArray.length;i++) {
+                // add to the sustain notes
+                if (Math.abs(sustainedArray[i].startTime+sustainedArray[i].length-this.timeFrames.back().millis)<EPSILON) {
+                    this.timeFrames.back().offNotes.push(sustainedArray[i]);
+                } else {
+                    susNotes.push(sustainedArray[i]);
+                    // check if should add to the next batch
+                    if (this.timeFrames.back().millis+EPSILON<sustainedArray[i].startTime+sustainedArray[i].length) {
+                        replaceSus.push(sustainedArray[i]);
+                    }
                 }
             }
+            sustainedArray = replaceSus;
         }
-        sustainedArray = replaceSus;
         if (typeof x.instrumentIndex === "number") {
             var numberDetected = false;
+            var volumeDetected = false;
+            var curVolume;
             var curNumber = 0;
             var noteBuffer = {
                 startTime: x.millis,
                 noteNumber: NaN, // store note number
                 frequency: 0,
                 length: 0,
+                volume: 1,
                 type: data.instruments[x.instrumentIndex].type,
                 wave: data.instruments[x.instrumentIndex].wave
             };
@@ -413,6 +427,7 @@ var PlayableMusic = function(data) {
                         if (notesArr[noteBuffer.noteNumber]) {
                             // if exists create note from the note buffer
                             noteBuffer.frequency = notesArr[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
+                            noteBuffer.volume = volumeMap[x.volume] || 1;
                             var newNote = new PlayableNote(noteBuffer);
                             // add to onNotes
                             this.timeFrames.back().onNotes.push(newNote);
@@ -431,6 +446,19 @@ var PlayableMusic = function(data) {
                     // advance character
                     x.stringPointer++;
                     break;
+                }
+                // handle volume
+                if (volumeChar.soft === currentChar) {
+                    if (!volumeDetected) { curVolume = 0; }
+                    curVolume--;
+                    volumeDetected = true;
+                } else if (volumeChar.loud === currentChar) {
+                    if (!volumeDetected) { curVolume = 0; }
+                    curVolume++;
+                    volumeDetected = true;
+                } else if (volumeDetected) {
+                    x.volume = curVolume;
+                    volumeDetected = false;
                 }
                 switch (currentChar) {
                     case "/":
@@ -586,6 +614,7 @@ var MusicPlayer = function(songData) {
     this.playAll = false;
     this.volume = 1; // volume multiplier
     this.playingFrame = 0;
+    this.speed = 1; // speed multiplier
 };
 /**
  * Set if the song should loop
@@ -604,7 +633,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = 1.5; // storing version number for version control
+MusicPlayer.version = "1.6"; // storing version number for version control
 
 /**
  * Plays the selected song at time this.time.
@@ -669,7 +698,7 @@ MusicPlayer.prototype.endSong = function() {
 MusicPlayer.prototype.pause = function() {
     if (this.playing) {
         this.playing = false;
-        this.time += new Date().getTime()-this.startTime;
+        this.time += (new Date().getTime()-this.startTime)*this.speed;
         this.data[this.songIndex].stop(this); // this helps it stop
         AudioContextManager.releaseAudioContext();
         this.audioContext = null;
@@ -795,7 +824,7 @@ MusicPlayer.prototype.getCurrentSongData = function() {
  */
 MusicPlayer.prototype.getTime = function() {
     // Much oblivious
-    return this.time + new Date().getTime() - this.startTime;
+    return this.time + (new Date().getTime() - this.startTime)*this.speed;
 };
 /**
  * Get the data of the current playing song.
@@ -809,7 +838,7 @@ MusicPlayer.prototype.getCurrentPlayingData = function() {
     }
     if (this.playing) {
         return {
-            time: (this.time + new Date().getTime() - this.startTime)/1000
+            time: (this.time + (new Date().getTime() - this.startTime)*this.speed)/1000
         };
     } else {
         return {
