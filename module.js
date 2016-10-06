@@ -555,7 +555,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = "2.00"; // storing version number for version control
+MusicPlayer.version = "2.0.0"; // storing version number for version control
 
 /**
  * Plays the selected song at time this.time.
