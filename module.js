@@ -107,6 +107,15 @@ Priority_Queue.heapsort = function(arr, lessThan) {
 Array.prototype.back = function() {
     return this[this.length-1];
 };
+Array.prototype.shuffle = function() {
+    var r, temp, i = this.length;
+    for (i=this.length;i>0;i--) {
+        r = Math.floor(Math.random()*i);
+        temp = this[i-1];
+        this[i-1] = this[r];
+        this[r] = temp;
+    }
+};
 /**
  * This manages the number of AudioContext on the page.
  * AudioContextManager.getAudioContext() gets an instance of AudioContext.
@@ -140,74 +149,6 @@ var notesArr = [];
 for (var i=0;i<100;i++) {
     notesArr.push(27.5*Math.pow(2, i/12));
 }
-/**
- * How to store song data
- * 
- * Human-readable form
- * 
- * Data stored
- * 1. Mapping from characters to notes
- * 2. Instruments (basically the different waveforms)
- * 
- * Notes are written as a string
- * [note character][octave modifier][base ticks]
- * a               ++               4
- * a++4, gives the note and time.
- * 
- * a++4a+4,
- * Plays two notes an octave apart at the same time
- * Same duration (4 ticks)
- * 
- * It is safe to insert random characters between notes, which are not ()/[],0123456789
- * I recommend | as a barline (syntactic sugar only, no effect).
- * 
- * Comma after every note to demonstrate end of a note.
- * Any character for a rest, but I recommend "&".
- * &12: Rest for 12 ticks
- * g++4&2,a++4:
- * Play first note for 4 ticks at time 0,
- * Play second note for 4 ticks at time 0+2.
- * 
- * Brackets allow for octave modifiers and time modifiers /[]
- * Modifiers occur between the / and [ characters.
- * The notes which are modified are within the square brackets []
- * Time modifier 3: /3[notes]
- * Every number that represents an amount of time
- * in the square brackets would be divided by 3.
- * 
- * Example:
- * /3++-7+[]
- * Divides numbers by 21 (3 times 7),
- * Increments by 2 octaves (++-+)
- * 
- * Round brackets:
- * Round brackets are required around everything.
- * It is not allowed to nest them, otherwise
- * undefined behaviour would occur. Round brackets
- * can be used to input BPM. Only integer values of
- * BPM are supported so far
- * (this can be modified in the future,
- * for now, hack in the BPM you want using /[]).
- * 
- * This shows a song with 2 sections, one at 240 BPM
- * and one at 140 BPM.
- * 240(notes)140(more notes)
- * 
- * Computer-readable form
- * Frames, which happen when at least one new note is pressed or one is released
- * Each frame stores the new notes, the notes which would be released,
- * and the notes which are sustained.
- * 
- * Extra info:
- * Songs exist independently of what is playing them, but need their help.
- * 
- * Song iterator
- * More than one song might be playing
- * at a time, but each MusicPlayer
- * should play only one song.
- * It is safe to run multiple
- * MusicPlayers at a time.
- */
 
 /**
  * Construct a note to play as part of a song.
@@ -259,25 +200,8 @@ PlayableNote.instruments = PlayableNote.createInstruments({
  * @param {Object} destination Where to send the nodes to
  */
 PlayableNote.prototype.start = function(audioContext, destination) {
-    if (this.oscillator) {
-        this.oscillator.stop();
-    }
-    this.oscillator = audioContext.createOscillator();
-    var gainNode = audioContext.createGain();
-    gainNode.gain.value = this.volume;
-    this.oscillator.connect(gainNode);
-    gainNode.connect(destination || audioContext.destination);
-    // set the volume
-    gainNode.gain.value = this.volume;
-    if (this.type === "custom") {
-        this.oscillator.setPeriodicWave(this.wave);
-    } else {
-        this.oscillator.type = this.type;
-    }
-    this.oscillator.frequency.value = this.frequency; 
-    this.oscillator.start(0);
-    this.oscillator.stop(audioContext.currentTime+this.length/1000);
-    return this.oscillator; // returning it won't hurt
+    // just trying not to repeat myself
+    return this.startAt(this.startTime);
 };
 /**
  * Begins the note, assuming the current song time.
@@ -286,8 +210,10 @@ PlayableNote.prototype.start = function(audioContext, destination) {
  * @param {AudioContext} audioContext
  * @param {Object} destination Where to send the nodes to
  * @param {Number} time Time to start the note at
+ * @param {Number} speed Speed to play the note at
  */
-PlayableNote.prototype.startAt = function(audioContext, destination, time) {
+PlayableNote.prototype.startAt = function(audioContext, destination, time, speed) {
+    speed = speed || 1; // set speed to 1 if missing
     this.oscillator = audioContext.createOscillator();
     var gainNode = audioContext.createGain();
     gainNode.gain.value = this.volume;
@@ -300,7 +226,7 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time) {
     }
     this.oscillator.frequency.value = this.frequency; 
     this.oscillator.start(0);
-    this.oscillator.stop(audioContext.currentTime+Math.max((this.length+this.startTime-time)/1000, 0));
+    this.oscillator.stop(audioContext.currentTime+Math.max((this.length+this.startTime-time)/1000/speed, 0));
     return this.oscillator; // returning it won't hurt
 };
 /**
@@ -328,8 +254,9 @@ var PlayableMusic = function(data) {
     this.maxBPM = 0;
     this.timeFrames = []; // objects
     this.composer = data.composer || "";
-    this.arranger = data.arranger || "";
+    this.arranger = data.arranger || this.composer;
     this.transcriber = data.transcriber || "";
+    this.length = 0;
     var mapping = data.noteMapping; // hashtable
     var volumeChar = (data.volume && data.volume.characters) || {};
     var volumeMap = (data.volume && data.volume.mapping) || {};
@@ -368,7 +295,6 @@ var PlayableMusic = function(data) {
             this.timeFrames.push({
                 millis: Math.round(x.millis), // round it
                 onNotes: [],
-                offNotes: [],
                 sustainNotes: []
             });
         }
@@ -381,14 +307,10 @@ var PlayableMusic = function(data) {
             var susNotes = this.timeFrames.back().sustainNotes;
             for (var i=0;i<sustainedArray.length;i++) {
                 // add to the sustain notes
-                if (Math.abs(sustainedArray[i].startTime+sustainedArray[i].length-this.timeFrames.back().millis)<EPSILON) {
-                    this.timeFrames.back().offNotes.push(sustainedArray[i]);
-                } else {
+                if (sustainedArray[i].startTime+sustainedArray[i].length<this.timeFrames.back().millis) {
                     susNotes.push(sustainedArray[i]);
-                    // check if should add to the next batch
-                    if (this.timeFrames.back().millis+EPSILON<sustainedArray[i].startTime+sustainedArray[i].length) {
-                        replaceSus.push(sustainedArray[i]);
-                    }
+                    // add to the next batch
+                    replaceSus.push(sustainedArray[i]);
                 }
             }
             sustainedArray = replaceSus;
@@ -433,8 +355,9 @@ var PlayableMusic = function(data) {
                             this.timeFrames.back().onNotes.push(newNote);
                             // add to sustainedArray
                             sustainedArray.push(newNote);
-                            // add element to pq to end the note.
-                            pq.push({ millis: x.millis+newNote.length });
+                            // update length of song
+                            this.length = Math.max(this.length, x.millis+newNote.length);
+                            //pq.push({ millis: x.millis+newNote.length });
                             noteBuffer.noteNumber = NaN; // ensure nothing gets played
                         }
                     }
@@ -518,7 +441,6 @@ var PlayableMusic = function(data) {
             }
         }
     }
-    this.length = this.timeFrames.back().millis;
 };
 /**
  * With the help of a manager, play the music at a certain time.
@@ -542,16 +464,16 @@ PlayableMusic.prototype.play = function(manager) {
     // start notes
     if (low<this.timeFrames.length) {
         for (var i=0;i<this.timeFrames[low].onNotes.length;i++) {
-            this.timeFrames[low].onNotes[i].startAt(manager.audioContext, manager.volumeNode, time);
+            this.timeFrames[low].onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
         }
         for (var i=0;i<this.timeFrames[low].sustainNotes.length;i++) {
-            this.timeFrames[low].sustainNotes[i].startAt(manager.audioContext, manager.volumeNode, time);
+            this.timeFrames[low].sustainNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
         }
         if (low+1<this.timeFrames.length) {
             manager.currentTimeout = setTimeout(function() {
                 manager.playingFrame++;
                 this.playFrame(manager);
-            }.bind(this), Math.max(this.timeFrames[low+1].millis-time, 0));
+            }.bind(this), Math.max((this.timeFrames[low+1].millis-time)/manager.speed, 0));
         } else {
             manager.endSong(); // music tells manager to stop
         }
@@ -568,13 +490,13 @@ PlayableMusic.prototype.playFrame = function(manager) {
     var frame = manager.playingFrame; // get the actual frame
     var time = manager.getTime();
     for (var i=0;i<this.timeFrames[frame].onNotes.length;i++) {
-        this.timeFrames[frame].onNotes[i].startAt(manager.audioContext, manager.volumeNode, time);
+        this.timeFrames[frame].onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
     }
     if (frame+1<this.timeFrames.length) {
         manager.currentTimeout = setTimeout(function() {
             manager.playingFrame++;
             this.playFrame(manager);
-        }.bind(this), Math.max(this.timeFrames[frame+1].millis-time, 0));
+        }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
     } else {
         manager.endSong(); // music tells manager to stop
     }
@@ -633,7 +555,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = "1.6"; // storing version number for version control
+MusicPlayer.version = "2.00"; // storing version number for version control
 
 /**
  * Plays the selected song at time this.time.
@@ -666,6 +588,19 @@ MusicPlayer.prototype.setVolume = function(volume) {
         this.volumeNode.gain.value = this.volume;
         this.pause();
         this.play();
+    }
+};
+/**
+ * Set the speed of the music. 1 means original speed.
+ * @param {Number} speed What to set it to.
+ */
+MusicPlayer.prototype.setSpeed = function(speed) {
+    if (this.playing && this.audioContext) {
+        this.pause();
+        this.speed = (+speed);
+        this.play();
+    } else {
+        this.speed = (+speed);
     }
 };
 /**
@@ -741,7 +676,7 @@ MusicPlayer.prototype.select = function(selector) {
  * Use only if you want a real random shuffle.
  */
 MusicPlayer.prototype.naiveShuffle = function() {
-    for (var i = this.data.length;i>=1;i--) {
+    for (var i = this.data.length;i>0;i--) {
         var index = Math.floor(Math.random() * i);
         var temp = this.data[index];
         this.data[index] = this.data[i-1];
@@ -761,12 +696,28 @@ MusicPlayer.prototype.sort = function(sortFunc) {
  * Not implemented yet.
  */
 MusicPlayer.prototype.smartShuffle = function() {
-    throw {
-        message: "MusicPlayer.prototype.smartShuffle not implemented yet",
-        toString: function() {
-            return this.message;
+    // group the songs by arranger
+    var map = new Map();
+    var arr = []; // temporary array
+    for (var i=0;i<this.data.length;i++) {
+        if (!map.has(this.data[i].arranger)) {
+            map.set(this.data[i].arranger, []);
         }
-    };
+        map.get(this.data[i].arranger).push(this.data[i]);
+    }
+    // for each song, give a random value
+    map.forEach(function(value) {
+        value.shuffle();
+        for (var i=0;i<value.length;i++) {
+            arr.push({song: value[i], rand: (i+Math.random())/value.length});
+        }
+    });
+    // sort
+    arr.sort(function(a, b) { return a.rand-b.rand; });
+    this.data = [];
+    for (var i=0;i<arr.length;i++) {
+        this.data[i] = arr[i].song;
+    }
 };
 /**
  * Get the titles of all the songs.
