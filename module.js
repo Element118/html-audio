@@ -143,7 +143,7 @@ var AudioContextManager = {
 
 var checkExists = (window.AudioContext || window.webkitAudioContext);
 if (!checkExists) {
-    alert("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, or Safari.");
+    alert("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
 }
 var notesArr = [];
 for (var i=0;i<100;i++) {
@@ -363,8 +363,14 @@ var PlayableMusic = function(data) {
                     }
                     curNumber = 0;
                 }
-                if (data.instruments[x.instrumentIndex].notes[x.stringPointer] === ",") {
+                if (currentChar === ",") {
                     // advance time
+                    x.millis = noteBuffer.length + noteBuffer.startTime;
+                    // advance character
+                    x.stringPointer++;
+                    break;
+                } else if (currentChar === ")") {
+                    x.parseState = "bpm entry";
                     x.millis = noteBuffer.length + noteBuffer.startTime;
                     // advance character
                     x.stringPointer++;
@@ -403,9 +409,6 @@ var PlayableMusic = function(data) {
                         break;
                     case "(":
                         x.parseState = "note entry";
-                        break;
-                    case ")":
-                        x.parseState = "bpm entry";
                         break;
                     case "+": // up octave
                         if (x.parseState === "settings") {
@@ -475,10 +478,14 @@ PlayableMusic.prototype.play = function(manager) {
                 this.playFrame(manager);
             }.bind(this), Math.max((this.timeFrames[low+1].millis-time)/manager.speed, 0));
         } else {
-            manager.endSong(); // music tells manager to stop
+            manager.currentTimeout = setTimeout(function() {
+                manager.endSong(); // music tells manager to stop
+            }.bind(this), Math.max((this.length-time)/manager.speed, 0));
         }
     } else {
-        manager.endSong();
+        manager.currentTimeout = setTimeout(function() {
+            manager.endSong(); // music tells manager to stop
+        }.bind(this), Math.max((this.length-time)/manager.speed, 0));
     }
 };
 /**
@@ -498,7 +505,9 @@ PlayableMusic.prototype.playFrame = function(manager) {
             this.playFrame(manager);
         }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
     } else {
-        manager.endSong(); // music tells manager to stop
+        manager.currentTimeout = setTimeout(function() {
+            manager.endSong(); // music tells manager to stop
+        }.bind(this), Math.max((this.length-time)/manager.speed, 0));
     }
 };
 /**
@@ -555,7 +564,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = "2.0.0"; // storing version number for version control
+MusicPlayer.version = "2.0.1"; // storing version number for version control
 
 /**
  * Plays the selected song at time this.time.
@@ -619,6 +628,7 @@ MusicPlayer.prototype.endSong = function() {
             if (this.songIndex === this.data.length) {
                 this.songIndex = this.loop?0:-1;
             }
+            this.time = 0;
             this.play();
         } else if (this.loop) {
             this.play(); // loop!
@@ -696,6 +706,10 @@ MusicPlayer.prototype.sort = function(sortFunc) {
  * Not implemented yet.
  */
 MusicPlayer.prototype.smartShuffle = function() {
+    var wasPlaying = this.playing;
+    if (this.playing) {
+        this.pause();
+    }
     // group the songs by arranger
     var map = new Map();
     var arr = []; // temporary array
@@ -717,6 +731,10 @@ MusicPlayer.prototype.smartShuffle = function() {
     this.data = [];
     for (var i=0;i<arr.length;i++) {
         this.data[i] = arr[i].song;
+    }
+    if (wasPlaying) {
+        this.select(0);
+        this.play();
     }
 };
 /**
@@ -761,7 +779,7 @@ MusicPlayer.prototype.getCurrentSongData = function() {
         composer: this.data[this.songIndex].composer,
         arranger: this.data[this.songIndex].arranger,
         transcriber: this.data[this.songIndex].transcriber,
-        duration: this.data[this.songIndex].length/1000, // seconds
+        duration: Math.round(this.data[this.songIndex].length)/1000, // seconds
         bpm: {
             min: this.data[this.songIndex].minBPM,
             max: this.data[this.songIndex].maxBPM
@@ -775,7 +793,7 @@ MusicPlayer.prototype.getCurrentSongData = function() {
  */
 MusicPlayer.prototype.getTime = function() {
     // Much oblivious
-    return this.time + (new Date().getTime() - this.startTime)*this.speed;
+    return Math.round(this.time + (new Date().getTime() - this.startTime)*this.speed);
 };
 /**
  * Get the data of the current playing song.
@@ -789,11 +807,11 @@ MusicPlayer.prototype.getCurrentPlayingData = function() {
     }
     if (this.playing) {
         return {
-            time: (this.time + (new Date().getTime() - this.startTime)*this.speed)/1000
+            time: Math.round(this.time + (new Date().getTime() - this.startTime)*this.speed)/1000
         };
     } else {
         return {
-            time: this.time/1000
+            time: Math.round(this.time)/1000
         };
     }
 };
