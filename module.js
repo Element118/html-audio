@@ -204,7 +204,7 @@ var PlayableNote = function(config) {
 PlayableNote.createInstruments = function(obj) {
     var audioContext = AudioContextManager.getAudioContext();
     for (var i in obj) {
-        if (obj[i].hasOwnProperty(i)) {
+        if (!obj[i].hasOwnProperty(i)) {
             obj[i] = audioContext.createPeriodicWave(obj[i].real, obj[i].imag);
         }
     }
