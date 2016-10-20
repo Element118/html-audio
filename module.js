@@ -1,3 +1,30 @@
+// tried to unroll the loop so that this would work
+for (var i=0;i<100000;i+=8) {
+    clearInterval(i);
+    clearTimeout(i);
+    cancelAnimationFrame(i);
+    clearInterval(i+1);
+    clearTimeout(i+1);
+    cancelAnimationFrame(i+1);
+    clearInterval(i+2);
+    clearTimeout(i+2);
+    cancelAnimationFrame(i+2);
+    clearInterval(i+3);
+    clearTimeout(i+3);
+    cancelAnimationFrame(i+3);
+    clearInterval(i+4);
+    clearTimeout(i+4);
+    cancelAnimationFrame(i+4);
+    clearInterval(i+5);
+    clearTimeout(i+5);
+    cancelAnimationFrame(i+5);
+    clearInterval(i+6);
+    clearTimeout(i+6);
+    cancelAnimationFrame(i+6);
+    clearInterval(i+7);
+    clearTimeout(i+7);
+    cancelAnimationFrame(i+7);
+}
 var Priority_Queue = function(lessThan, createFrom) {
     this.data = [0];
     this.lessThan = lessThan || function(a, b) {
@@ -74,10 +101,10 @@ Priority_Queue.fixHeapHere = function(arr, size, where, lessThan) {
     return null;
 };
 // using https://www.khanacademy.org/computer-programming/ast-nonsense-safe-new/5440494445920256
-var new_ = Object.constructor("cls", "args", 
+var new_ = Object.constructor("cls", "args",
     "args = Array.prototype.slice.call(args);\n" +
     "args.unshift(undefined);\n" +
-    "var obj = new (Function.prototype.bind.apply(cls, args))();\n" + 
+    "var obj = new (Function.prototype.bind.apply(cls, args))();\n" +
     "obj.constructor = cls;\n" + // In most cases this line can be removed
     "return obj;"
 );
@@ -141,13 +168,12 @@ var AudioContextManager = {
     }
 };
 
-var checkExists = (window.AudioContext || window.webkitAudioContext);
-if (!checkExists) {
-    alert("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
+if (!(window.AudioContext || window.webkitAudioContext)) {
+    console.log("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
 }
-var notesArr = [];
+var notesArr = {};
 for (var i=0;i<100;i++) {
-    notesArr.push(27.5*Math.pow(2, i/12));
+    notesArr[i] = 27.5*Math.pow(2, i/12);
 }
 
 /**
@@ -157,14 +183,13 @@ for (var i=0;i<100;i++) {
 var PlayableNote = function(config) {
     this.startTime = config.startTime;
     this.frequency = config.frequency;
-    this.type = config.type; // "sine", "square", "sawtooth", "triangle", "custom"
+    this.type = config.type;
     this.wave = this.type === "custom"?config.wave:undefined; // function
     if (PlayableNote.instruments[this.type]) {
         this.wave = PlayableNote.instruments[this.type];
-        this.type = "custom";
     }
     this.length = config.length; // in milliseconds
-    this.volume = config.volume; // 0: no sound, 1: loud (Not sure if can be louder)
+    this.volume = config.volume;
     if (typeof this.volume !== "number") {
         this.volume = 1;
     }
@@ -179,7 +204,9 @@ var PlayableNote = function(config) {
 PlayableNote.createInstruments = function(obj) {
     var audioContext = AudioContextManager.getAudioContext();
     for (var i in obj) {
-        obj[i] = audioContext.createPeriodicWave(obj[i].real, obj[i].imag);
+        if (obj[i].hasOwnProperty(i)) {
+            obj[i] = audioContext.createPeriodicWave(obj[i].real, obj[i].imag);
+        }
     }
     AudioContextManager.releaseAudioContext();
     return obj;
@@ -191,6 +218,14 @@ PlayableNote.instruments = PlayableNote.createInstruments({
     sample1: {
         real: Float32Array.from([0, 1, 1.5, 0]),
         imag: Float32Array.from([0, 0, 0, 0])
+    },
+    violin: {
+        real: Float32Array.from([0.62144,0.57895,0.47158,0.31905,0.15253,0.00626,-0.09205,-0.12895,-0.10804,-0.04609,0.03530,0.11310,0.17038,0.19649,0.18810,0.14547,0.07607,-0.00906,-0.09445,-0.16319,-0.19995,-0.19556,-0.15453,-0.09045,-0.02598,0.01678,0.02718,0.00626,-0.03330,-0.07433,-0.10577,-0.12589,-0.14001,-0.15453,-0.16918,-0.17904,-0.17464,-0.15293,-0.11923,-0.08726,-0.07234,-0.08392,-0.11763,-0.15746,-0.18450,-0.18450,-0.15826,-0.11869,-0.08579,-0.07247,-0.07780,-0.08646,-0.07913,-0.04476,0.01172,0.07114,0.11163,0.12176,0.10484,0.07753,0.05502,0.04223,0.03237,0.01199,-0.02638,-0.07513,-0.11563,-0.12416,-0.08619,-0.00440,0.10297,0.21168,0.30080,0.35835,0.38685,0.39125,0.37473,0.33916,0.28348,0.21128,0.13455,0.07074,0.03690,0.04050,0.07806,0.13495,0.19223,0.23126,0.24085,0.21727,0.16798,0.10684,0.05102,0.02051,0.02851,0.07993,0.16958,0.28375,0.40018,0.49582]),
+        imag: Float32Array.from([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])
+    },
+    piano: {
+        real: Float32Array.from([-0.28068,-0.28789,-0.28867,-0.28380,-0.27464,-0.26179,-0.24737,-0.23335,-0.22010,-0.20900,-0.19946,-0.19206,-0.18465,-0.17725,-0.16849,-0.15894,-0.14628,-0.13167,-0.11590,-0.09992,-0.08415,-0.06973,-0.05843,-0.05006,-0.04480,-0.04305,-0.04441,-0.04753,-0.05064,-0.05337,-0.05571,-0.05590,-0.05493,-0.05142,-0.04616,-0.03993,-0.03292,-0.02805,-0.02649,-0.02980,-0.03779,-0.05045,-0.06642,-0.08415,-0.10207,-0.11804,-0.13050,-0.13732,-0.13849,-0.13362,-0.12427,-0.11297,-0.09992,-0.08785,-0.07713,-0.06876,-0.06350,-0.06116,-0.06019,-0.05960,-0.05727,-0.05123,-0.04071,-0.02571,-0.00779,0.01091,0.02727,0.04051,0.04928,0.05220,0.05103,0.04733,0.04285,0.03837,0.03701,0.04013,0.04811,0.06233,0.08142,0.10382,0.12563,0.14511,0.15953,0.16849,0.17258,0.17141,0.16732,0.16070,0.15232,0.14453,0.13888,0.13401,0.13167,0.13031,0.12836,0.12525,0.11979,0.11142,0.10031,0.08726,0.07168,0.05532,0.03915,0.02513,0.01363,0.00370,-0.00331,-0.01013,-0.01675,-0.02357,-0.03097,-0.03857,-0.04538,-0.05240,-0.06058,-0.06934,-0.07791,-0.08726,-0.09583,-0.10246,-0.10577,-0.10518,-0.10129,-0.09311,-0.08142,-0.06623,-0.04733,-0.02513,-0.00058,0.02454,0.04928,0.07129,0.08882,0.10323,0.11297,0.12057,0.12758,0.13343,0.14024,0.14842,0.15544,0.16206,0.16790,0.17141,0.17199,0.16868,0.16147,0.15018,0.13440,0.11706,0.09759,0.07830,0.06058,0.04441,0.03058,0.01850,0.00760,-0.00584,-0.02240,-0.04383,-0.06973,-0.09953,-0.13109,-0.16342,-0.19634,-0.22751,-0.25575,-0.27971,-0.29704]),
+        imag: Float32Array.from([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]),
     }
 });
 /**
@@ -219,12 +254,12 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     gainNode.gain.value = this.volume;
     this.oscillator.connect(gainNode);
     gainNode.connect(destination || audioContext.destination);
-    if (this.type === "custom") {
+    if (this.wave) {
         this.oscillator.setPeriodicWave(this.wave);
     } else {
         this.oscillator.type = this.type;
     }
-    this.oscillator.frequency.value = this.frequency; 
+    this.oscillator.frequency.value = this.frequency;
     this.oscillator.start(0);
     this.oscillator.stop(audioContext.currentTime+Math.max((this.length+this.startTime-time)/1000/speed, 0));
     return this.oscillator; // returning it won't hurt
@@ -260,9 +295,7 @@ var PlayableMusic = function(data) {
     var mapping = data.noteMapping; // hashtable
     var volumeChar = (data.volume && data.volume.characters) || {};
     var volumeMap = (data.volume && data.volume.mapping) || {};
-    var stack = []; // an array repurposed as stack
     var EPSILON = 0.5; // honestly, anything less than a 0.5 millisecond difference doesn't matter much. We can't even show the difference for <1 ms.
-    var timeFrameIndex = 0; // a number index pointer
     // I think I need to process in parallel...
     var initPQ = [];
     // I can expect to have hundreds of instruments
@@ -307,7 +340,7 @@ var PlayableMusic = function(data) {
             var susNotes = this.timeFrames.back().sustainNotes;
             for (var i=0;i<sustainedArray.length;i++) {
                 // add to the sustain notes
-                if (sustainedArray[i].startTime+sustainedArray[i].length<this.timeFrames.back().millis) {
+                if (sustainedArray[i].startTime+sustainedArray[i].length>lastSustained) {
                     susNotes.push(sustainedArray[i]);
                     // add to the next batch
                     replaceSus.push(sustainedArray[i]);
@@ -446,11 +479,34 @@ var PlayableMusic = function(data) {
     }
 };
 /**
- * With the help of a manager, play the music at a certain time.
- * @param {MusicPlayer} manager
+ * Asynchronously constructs music from data.
+ * @param {Object[]} musicData an array of song data
+ * @param {Number} timeDelay how much time to wait between constructions
+ * @return promise
  */
-PlayableMusic.prototype.play = function(manager) {
-    var time = manager.getTime();
+PlayableMusic.async_construction = function(musicData, timeDelay) {
+    timeDelay = timeDelay || 200;
+    var p = new Promise(function(resolve, reject) {
+        var index = 0;
+        var constructionInterval = setInterval(function() {
+            if (index < musicData.length) {
+                musicData[index] = new PlayableMusic(musicData[index]);
+                index++;
+            }
+            if (index >= musicData.length) {
+                clearInterval(constructionInterval);
+                resolve(musicData);
+            }
+        }, timeDelay);
+    });
+    return p;
+};
+/**
+ * Get the last frame of music before the time.
+ * @param {Number} time in milliseconds
+ * @return the last frame of music
+ */
+PlayableMusic.prototype.getFrame = function(time) {
     var low = 0, high = this.timeFrames.length;
     while (low+1<high) {
         var mid = Math.floor((low+high)/2);
@@ -463,20 +519,29 @@ PlayableMusic.prototype.play = function(manager) {
             high = mid+1;
         }
     }
-    manager.playingFrame = low;
+    return low;
+};
+/**
+ * With the help of a manager, play the music at a certain time.
+ * @param {MusicPlayer} manager
+ */
+PlayableMusic.prototype.play = function(manager) {
+    var time = manager.getTime();
+    var frame = this.getFrame(time);
+    manager.playingFrame = frame;
     // start notes
-    if (low<this.timeFrames.length) {
-        for (var i=0;i<this.timeFrames[low].onNotes.length;i++) {
-            this.timeFrames[low].onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
+    if (frame<this.timeFrames.length) {
+        for (var i=0;i<this.timeFrames[frame].onNotes.length;i++) {
+            this.timeFrames[frame].onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
         }
-        for (var i=0;i<this.timeFrames[low].sustainNotes.length;i++) {
-            this.timeFrames[low].sustainNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
+        for (var i=0;i<this.timeFrames[frame].sustainNotes.length;i++) {
+            this.timeFrames[frame].sustainNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
         }
-        if (low+1<this.timeFrames.length) {
+        if (frame+1<this.timeFrames.length) {
             manager.currentTimeout = setTimeout(function() {
                 manager.playingFrame++;
                 this.playFrame(manager);
-            }.bind(this), Math.max((this.timeFrames[low+1].millis-time)/manager.speed, 0));
+            }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
         } else {
             manager.currentTimeout = setTimeout(function() {
                 manager.endSong(); // music tells manager to stop
@@ -548,6 +613,20 @@ var MusicPlayer = function(songData) {
     this.speed = 1; // speed multiplier
 };
 /**
+ * Add a song to the current songs.
+ * @param {PlayableMusic} songData
+ */
+MusicPlayer.prototype.addSong = function(songData) {
+    this.data.push(songData);
+};
+/**
+ * Add an array of songs to the current songs.
+ * @param {PlayableMusic} songData
+ */
+MusicPlayer.prototype.addSongs = function(songData) {
+    this.data = this.data.concat(songData);
+};
+/**
  * Set if the song should loop
  * @param {Boolean} loop
  */
@@ -564,7 +643,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = "2.0.1"; // storing version number for version control
+MusicPlayer.version = "2.0.3"; // storing version number for version control
 
 /**
  * Plays the selected song at time this.time.
@@ -732,8 +811,9 @@ MusicPlayer.prototype.smartShuffle = function() {
     for (var i=0;i<arr.length;i++) {
         this.data[i] = arr[i].song;
     }
+    this.select(0); // reset selection
+    this.time = 0; // reset time
     if (wasPlaying) {
-        this.select(0);
         this.play();
     }
 };
@@ -762,7 +842,7 @@ MusicPlayer.prototype.getTitles = function(sortFunc) {
 MusicPlayer.prototype.getCurrentSongData = function() {
     if (this.songIndex === -1) {
         return {
-            title: "",
+            title: "[No song selected]",
             composer: "",
             arranger: "",
             transcriber: "",
@@ -796,6 +876,7 @@ MusicPlayer.prototype.getTime = function() {
     return Math.round(this.time + (new Date().getTime() - this.startTime)*this.speed);
 };
 /**
+ * @deprecated in 3.0.0, use getTimeData instead.
  * Get the data of the current playing song.
  * @return {Object} data
  */
@@ -816,11 +897,34 @@ MusicPlayer.prototype.getCurrentPlayingData = function() {
     }
 };
 /**
- * Does this even make sense?
- * @return {String} ""
+ * Get the time-related data of the current playing song.
+ * @return {Object} data
+ */
+MusicPlayer.prototype.getTimeData = function() {
+    if (this.songIndex === -1) {
+        return {
+            currentTime: 0,
+            duration: 0,
+        };
+    }
+    if (this.playing) {
+        return {
+            currentTime: Math.round(this.time + (new Date().getTime() - this.startTime)*this.speed)/1000,
+            duration: Math.round(this.data[this.songIndex].length)/1000,
+        };
+    } else {
+        return {
+            currentTime: Math.round(this.time)/1000,
+            duration: Math.round(this.data[this.songIndex].length)/1000,
+        };
+    }
+};
+/**
+ * Returns some data, hopefully.
+ * @return {String} "[Object MusicPlayer]"
  */
 MusicPlayer.prototype.toString = function() {
-    return "";
+    return "[Object MusicPlayer]";
 };
 var module = {
     Priority_Queue: Priority_Queue,
