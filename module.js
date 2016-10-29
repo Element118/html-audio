@@ -25,6 +25,7 @@ for (var i=0;i<100000;i+=8) {
     clearTimeout(i+7);
     cancelAnimationFrame(i+7);
 }
+
 var Priority_Queue = function(lessThan, createFrom) {
     this.data = [0];
     this.lessThan = lessThan || function(a, b) {
@@ -229,6 +230,7 @@ PlayableNote.instruments = PlayableNote.createInstruments({
     }
 });
 /**
+ * @Deprecated in 3.0.0, also buggy since I noticed it.
  * Begins the note. Automatically stops it at the intended time.
  * Uses AudioContext.
  * @param {AudioContext} audioContext
@@ -276,10 +278,11 @@ PlayableNote.prototype.stop = function() {
 
 /**
  * Constructs a data structure to hold a song out of the data object.
+ * This should be optimised as much as possible.
  * data has important properties that can be set:
  * data.title: title of the song
  * data.noteMapping: define a mapping between characters and notes for easy input
- * Do not use the characters ()[]\,&+-1234567890 in the mapping
+ *   Do not use the characters ()[]\,&+-1234567890 in the mapping
  * data.instruments: store what the instruments do
  * @param {Object} data song data
  */
@@ -299,7 +302,8 @@ var PlayableMusic = function(data) {
     // I think I need to process in parallel...
     var initPQ = [];
     // I can expect to have hundreds of instruments
-    for (var i=0;i<data.instruments.length;i++) {
+    var loopLength = data.instruments.length; // local variable to optimise loops
+    for (var i=0;i<loopLength;i++) {
         initPQ.push({
             instrumentIndex: i,
             stringPointer: 0,
@@ -338,7 +342,8 @@ var PlayableMusic = function(data) {
             lastSustained = this.timeFrames.back().millis;
             var replaceSus = [];
             var susNotes = this.timeFrames.back().sustainNotes;
-            for (var i=0;i<sustainedArray.length;i++) {
+            loopLength = sustainedArray.length;
+            for (var i=0;i<loopLength;i++) {
                 // add to the sustain notes
                 if (sustainedArray[i].startTime+sustainedArray[i].length>lastSustained) {
                     susNotes.push(sustainedArray[i]);
@@ -353,6 +358,7 @@ var PlayableMusic = function(data) {
             var volumeDetected = false;
             var curVolume;
             var curNumber = 0;
+            var floatDetect = false;
             var noteBuffer = {
                 startTime: x.millis,
                 noteNumber: NaN, // store note number
@@ -366,12 +372,18 @@ var PlayableMusic = function(data) {
                 timeMultiplier: 1,
                 octaveChange: 0
             };
-            for (;x.stringPointer<data.instruments[x.instrumentIndex].notes.length;x.stringPointer++) {
+            loopLength = data.instruments[x.instrumentIndex].notes.length;
+            for (;x.stringPointer<loopLength;x.stringPointer++) {
                 var currentChar = data.instruments[x.instrumentIndex].notes[x.stringPointer];
                 if (numberDetected && !(48 <= currentChar.charCodeAt(0) && currentChar.charCodeAt(0) <= 57)) {
+                    if (x.parseState === "bpm entry" && !floatDetect && currentChar === ".") {
+                        floatDetect = true;
+                        curNumber += ".";
+                        continue;
+                    }
                     numberDetected = false;
                     if (x.parseState === "bpm entry") {
-                        x.bpm = curNumber;
+                        x.bpm = +curNumber;
                         this.minBPM = Math.min(this.minBPM, x.bpm);
                         this.maxBPM = Math.max(this.maxBPM, x.bpm);
                     } else if (x.parseState === "settings") {
@@ -390,7 +402,6 @@ var PlayableMusic = function(data) {
                             sustainedArray.push(newNote);
                             // update length of song
                             this.length = Math.max(this.length, x.millis+newNote.length);
-                            //pq.push({ millis: x.millis+newNote.length });
                             noteBuffer.noteNumber = NaN; // ensure nothing gets played
                         }
                     }
@@ -423,26 +434,6 @@ var PlayableMusic = function(data) {
                     volumeDetected = false;
                 }
                 switch (currentChar) {
-                    case "/":
-                        x.parseState = "settings";
-                        break;
-                    case "[":
-                        x.modifierStack.push({
-                            timeMultiplier: x.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
-                            octaveChange: x.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
-                        });
-                        modifierBuffer.timeMultiplier = 1;
-                        modifierBuffer.octaveChange = 0;
-                        // push settings on the stack
-                        x.parseState = "note entry";
-                        break;
-                    case "]":
-                        // pop settings off the stack
-                        x.modifierStack.pop();
-                        break;
-                    case "(":
-                        x.parseState = "note entry";
-                        break;
                     case "+": // up octave
                         if (x.parseState === "settings") {
                             modifierBuffer.octaveChange++;
@@ -463,16 +454,38 @@ var PlayableMusic = function(data) {
                         if (!numberDetected) {
                             curNumber = currentChar.charCodeAt(0)-48;
                             numberDetected = true;
+                        } else if (floatDetect) {
+                            curNumber += currentChar; // string now
                         } else {
                             curNumber = curNumber * 10 + currentChar.charCodeAt(0)-48;
                         }
+                        break;
+                    case "/":
+                        x.parseState = "settings";
+                        break;
+                    case "[":
+                        x.modifierStack.push({
+                            timeMultiplier: x.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
+                            octaveChange: x.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
+                        });
+                        modifierBuffer.timeMultiplier = 1;
+                        modifierBuffer.octaveChange = 0;
+                        // push settings on the stack
+                        x.parseState = "note entry";
+                        break;
+                    case "]":
+                        // pop settings off the stack
+                        x.modifierStack.pop();
+                        break;
+                    case "(":
+                        x.parseState = "note entry";
                         break;
                     default:
                         noteBuffer.noteNumber = mapping[currentChar] || NaN;
                 }
             }
-            // is there still input?
-            if (x.stringPointer<data.instruments[x.instrumentIndex].notes.length) {
+            // check if there is still input
+            if (x.stringPointer<loopLength) {
                 pq.push(x);
             }
         }
@@ -482,7 +495,7 @@ var PlayableMusic = function(data) {
  * Asynchronously constructs music from data.
  * @param {Object[]} musicData an array of song data
  * @param {Number} timeDelay how much time to wait between constructions
- * @return promise
+ * @return promise, returns the data using the resolve function.
  */
 PlayableMusic.async_construction = function(musicData, timeDelay) {
     timeDelay = timeDelay || 200;
@@ -611,6 +624,26 @@ var MusicPlayer = function(songData) {
     this.volume = 1; // volume multiplier
     this.playingFrame = 0;
     this.speed = 1; // speed multiplier
+    this.callbacks = {}; // manage callbacks in hash
+};
+/**
+ * Bind a callback to call when an event happens.
+ * The callback can accept 2 parameters: data and this
+ * "play"
+ * "pause"
+ * "loop"
+ * "listupdate"
+ * "songupdate"
+ * "speedupdate"
+ * "volumeupdate"
+ * "songend"
+ * @param {PlayableMusic} songData
+ */
+MusicPlayer.prototype.on = function(event, callback) {
+    this.callbacks[event] = callback;
+};
+MusicPlayer.prototype.off = function(event) {
+    delete this.callbacks[event];
 };
 /**
  * Add a song to the current songs.
@@ -618,6 +651,7 @@ var MusicPlayer = function(songData) {
  */
 MusicPlayer.prototype.addSong = function(songData) {
     this.data.push(songData);
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
 };
 /**
  * Add an array of songs to the current songs.
@@ -625,6 +659,7 @@ MusicPlayer.prototype.addSong = function(songData) {
  */
 MusicPlayer.prototype.addSongs = function(songData) {
     this.data = this.data.concat(songData);
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
 };
 /**
  * Set if the song should loop
@@ -643,7 +678,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = "2.0.3"; // storing version number for version control
+MusicPlayer.version = "2.1.0";
 
 /**
  * Plays the selected song at time this.time.
@@ -662,6 +697,7 @@ MusicPlayer.prototype.play = function() {
         }
         this.startTime = new Date().getTime();
         this.data[this.songIndex].play(this);
+        this.callbacks.play && this.callbacks.play(this.data[this.songIndex], this);
     }
 };
 /**
@@ -674,9 +710,16 @@ MusicPlayer.prototype.setVolume = function(volume) {
         this.volumeNode = this.audioContext.createGain();
         this.volumeNode.connect(this.audioContext.destination);
         this.volumeNode.gain.value = this.volume;
+        var tempPlay = this.callbacks.play; // store
+        var tempPause = this.callbacks.pause; // store
+        this.callbacks.play = undefined;
+        this.callbacks.pause = undefined;
         this.pause();
         this.play();
+        if (tempPlay) this.callbacks.play = tempPlay;
+        if (tempPause) this.callbacks.pause = tempPause;
     }
+    this.callbacks.volumeupdate && this.callbacks.volumeupdate(this.volume, this);
 };
 /**
  * Set the speed of the music. 1 means original speed.
@@ -690,6 +733,7 @@ MusicPlayer.prototype.setSpeed = function(speed) {
     } else {
         this.speed = (+speed);
     }
+    this.callbacks.speedupdate && this.callbacks.speedupdate(this.speed, this);
 };
 /**
  * A callback back to stop the current song playing.
@@ -704,12 +748,15 @@ MusicPlayer.prototype.endSong = function() {
         this.time = this.data[this.songIndex].length;
         if (this.playAll) {
             this.songIndex++;
+            this.time = 0;
             if (this.songIndex === this.data.length) {
                 this.songIndex = this.loop?0:-1;
+                this.loop && this.callbacks.loop && this.callbacks.loop(this.songindex, this);
             }
-            this.time = 0;
+            this.callbacks.songend && this.callbacks.songend(this.songindex, this);
             this.play();
         } else if (this.loop) {
+            this.callbacks.loop && this.callbacks.loop(this.songindex, this);
             this.play(); // loop!
         }
     }
@@ -726,10 +773,12 @@ MusicPlayer.prototype.pause = function() {
         this.data[this.songIndex].stop(this); // this helps it stop
         AudioContextManager.releaseAudioContext();
         this.audioContext = null;
+        this.callbacks.pause && this.callbacks.pause();
     }
 };
 /**
  * Set the point the song should be at.
+ * No song should be playing when this function is called.
  * @param {Number} time
  */
 MusicPlayer.prototype.seek = function(time) {
@@ -759,6 +808,7 @@ MusicPlayer.prototype.select = function(selector) {
         }
     }
     this.time = 0;
+    this.callbacks.songchange && this.callbacks.songchange(this.songIndex, this);
 };
 /**
  * Naively shuffles all the songs
@@ -771,6 +821,7 @@ MusicPlayer.prototype.naiveShuffle = function() {
         this.data[index] = this.data[i-1];
         this.data[i-1] = temp;
     }
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
 };
 /**
  * Sorts the songs based off a function
@@ -778,11 +829,11 @@ MusicPlayer.prototype.naiveShuffle = function() {
  */
 MusicPlayer.prototype.sort = function(sortFunc) {
     this.data.sort(sortFunc);
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
 };
 /**
  * Smartly shuffles all the songs
- * Used when you hate naive shuffles.
- * Not implemented yet.
+ * Used when you hate naive shuffles.]
  */
 MusicPlayer.prototype.smartShuffle = function() {
     var wasPlaying = this.playing;
@@ -816,6 +867,7 @@ MusicPlayer.prototype.smartShuffle = function() {
     if (wasPlaying) {
         this.play();
     }
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
 };
 /**
  * Get the titles of all the songs.
@@ -824,11 +876,9 @@ MusicPlayer.prototype.smartShuffle = function() {
  * @return {String[]} array of titles
  */
 MusicPlayer.prototype.getTitles = function(sortFunc) {
-    if (!this.titles) {
-        this.titles = [];
-        for (var i=0;i<this.data.length;i++) {
-            this.titles.push(this.data[i].title);
-        }
+    this.titles = [];
+    for (var i=0;i<this.data.length;i++) {
+        this.titles.push(this.data[i].title);
     }
     if (sortFunc) {
         this.titles.sort(sortFunc);
@@ -926,6 +976,7 @@ MusicPlayer.prototype.getTimeData = function() {
 MusicPlayer.prototype.toString = function() {
     return "[Object MusicPlayer]";
 };
+
 var module = {
     Priority_Queue: Priority_Queue,
     AudioContextManager: AudioContextManager,
