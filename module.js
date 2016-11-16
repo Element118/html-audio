@@ -1,4 +1,3 @@
-// tried to unroll the loop so that this would work
 for (var i=0;i<100000;i+=8) {
     clearInterval(i);
     clearTimeout(i);
@@ -179,7 +178,8 @@ for (var i=0;i<100;i++) {
 
 /**
  * Construct a note to play as part of a song.
- * Wraps around OscillatorNode.
+ * Wraps around OscillatorNode
+ * @param {Object} config
  */
 var PlayableNote = function(config) {
     this.startTime = config.startTime;
@@ -188,6 +188,22 @@ var PlayableNote = function(config) {
     this.wave = this.type === "custom"?config.wave:undefined; // function
     if (PlayableNote.instruments[this.type]) {
         this.wave = PlayableNote.instruments[this.type];
+    }
+    if (!this.wave) {
+        switch (this.type) {
+            // known types, fallthrough
+            case "sine":
+            case "triangle":
+            case "sawtooth":
+            case "square": break;
+            // cannot recognise wave
+            default:
+                if (!PlayableNote.missingInstruments[this.wave]) {
+                    console.log("No waveform for instrument \""+this.wave+"\".")
+                    PlayableNote.missingInstruments[this.wave] = true;
+                }
+                this.type = "sine";
+        }
     }
     this.length = config.length; // in milliseconds
     this.volume = config.volume;
@@ -229,6 +245,11 @@ PlayableNote.instruments = PlayableNote.createInstruments({
         imag: Float32Array.from([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]),
     }
 });
+/**
+ * An object to store all the instruments
+ * which cannot be found.
+ */
+PlayableNote.missingInstruments = {};
 /**
  * @Deprecated in 3.0.0, also buggy since I noticed it.
  * Begins the note. Automatically stops it at the intended time.
@@ -327,7 +348,11 @@ var PlayableMusic = function(data) {
     var lastSustained = -1;
     while (!pq.empty()) {
         var x = pq.top(); pq.pop();
-        if (this.timeFrames.length === 0 || Math.abs(this.timeFrames.back().millis-x.millis)>EPSILON) {
+        if (!this.timeFrames.length || Math.abs(this.timeFrames.back().millis-x.millis)>EPSILON) {
+            if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) {
+                // pop last element (empty)
+                this.timeFrames.pop();
+            }
             // produce new time frame
             this.timeFrames.push({
                 millis: Math.round(x.millis), // round it
@@ -353,144 +378,147 @@ var PlayableMusic = function(data) {
             }
             sustainedArray = replaceSus;
         }
-        if (typeof x.instrumentIndex === "number") {
-            var numberDetected = false;
-            var volumeDetected = false;
-            var curVolume;
-            var curNumber = 0;
-            var floatDetect = false;
-            var noteBuffer = {
-                startTime: x.millis,
-                noteNumber: NaN, // store note number
-                frequency: 0,
-                length: 0,
-                volume: 1,
-                type: data.instruments[x.instrumentIndex].type,
-                wave: data.instruments[x.instrumentIndex].wave
-            };
-            var modifierBuffer = {
-                timeMultiplier: 1,
-                octaveChange: 0
-            };
-            loopLength = data.instruments[x.instrumentIndex].notes.length;
-            for (;x.stringPointer<loopLength;x.stringPointer++) {
-                var currentChar = data.instruments[x.instrumentIndex].notes[x.stringPointer];
-                if (numberDetected && !(48 <= currentChar.charCodeAt(0) && currentChar.charCodeAt(0) <= 57)) {
-                    if (x.parseState === "bpm entry" && !floatDetect && currentChar === ".") {
-                        floatDetect = true;
-                        curNumber += ".";
-                        continue;
+        var numberDetected = false;
+        var volumeDetected = false;
+        var curVolume;
+        var curNumber = 0;
+        var floatDetect = false;
+        var noteBuffer = {
+            startTime: Math.round(x.millis),
+            noteNumber: NaN, // store note number
+            frequency: 0,
+            length: 0,
+            volume: 1,
+            type: data.instruments[x.instrumentIndex].type,
+            wave: data.instruments[x.instrumentIndex].wave
+        };
+        var modifierBuffer = {
+            timeMultiplier: 1,
+            octaveChange: 0
+        };
+        loopLength = data.instruments[x.instrumentIndex].notes.length;
+        for (;x.stringPointer<loopLength;x.stringPointer++) {
+            var currentChar = data.instruments[x.instrumentIndex].notes[x.stringPointer];
+            if (numberDetected && !(48 <= currentChar.charCodeAt(0) && currentChar.charCodeAt(0) <= 57)) {
+                if (x.parseState === "bpm entry" && !floatDetect && currentChar === ".") {
+                    floatDetect = true;
+                    curNumber += ".";
+                    continue;
+                }
+                numberDetected = false;
+                if (x.parseState === "bpm entry") {
+                    x.bpm = +curNumber;
+                    this.minBPM = Math.min(this.minBPM, x.bpm);
+                    this.maxBPM = Math.max(this.maxBPM, x.bpm);
+                } else if (x.parseState === "settings") {
+                    modifierBuffer.timeMultiplier *= curNumber;
+                } else { // note entry
+                    noteBuffer.length = curNumber / x.modifierStack.back().timeMultiplier * (60000 / x.bpm);
+                    // create note
+                    if (notesArr[noteBuffer.noteNumber]) {
+                        // if exists create note from the note buffer
+                        noteBuffer.frequency = notesArr[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
+                        noteBuffer.volume = volumeMap[x.volume] || 1;
+                        var newNote = new PlayableNote(noteBuffer);
+                        // add to onNotes
+                        this.timeFrames.back().onNotes.push(newNote);
+                        // add to sustainedArray
+                        sustainedArray.push(newNote);
+                        // update length of song
+                        this.length = Math.max(this.length, x.millis+newNote.length);
+                        noteBuffer.noteNumber = NaN; // ensure nothing gets played
                     }
-                    numberDetected = false;
-                    if (x.parseState === "bpm entry") {
-                        x.bpm = +curNumber;
-                        this.minBPM = Math.min(this.minBPM, x.bpm);
-                        this.maxBPM = Math.max(this.maxBPM, x.bpm);
-                    } else if (x.parseState === "settings") {
-                        modifierBuffer.timeMultiplier *= curNumber;
-                    } else { // note entry
-                        noteBuffer.length = curNumber / x.modifierStack.back().timeMultiplier * (60000 / x.bpm);
-                        // create note
-                        if (notesArr[noteBuffer.noteNumber]) {
-                            // if exists create note from the note buffer
-                            noteBuffer.frequency = notesArr[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
-                            noteBuffer.volume = volumeMap[x.volume] || 1;
-                            var newNote = new PlayableNote(noteBuffer);
-                            // add to onNotes
-                            this.timeFrames.back().onNotes.push(newNote);
-                            // add to sustainedArray
-                            sustainedArray.push(newNote);
-                            // update length of song
-                            this.length = Math.max(this.length, x.millis+newNote.length);
-                            noteBuffer.noteNumber = NaN; // ensure nothing gets played
-                        }
-                    }
-                    curNumber = 0;
                 }
-                if (currentChar === ",") {
-                    // advance time
-                    x.millis = noteBuffer.length + noteBuffer.startTime;
-                    // advance character
-                    x.stringPointer++;
-                    break;
-                } else if (currentChar === ")") {
-                    x.parseState = "bpm entry";
-                    x.millis = noteBuffer.length + noteBuffer.startTime;
-                    // advance character
-                    x.stringPointer++;
-                    break;
-                }
-                // handle volume
-                if (volumeChar.soft === currentChar) {
-                    if (!volumeDetected) { curVolume = 0; }
-                    curVolume--;
-                    volumeDetected = true;
-                } else if (volumeChar.loud === currentChar) {
-                    if (!volumeDetected) { curVolume = 0; }
-                    curVolume++;
-                    volumeDetected = true;
-                } else if (volumeDetected) {
-                    x.volume = curVolume;
-                    volumeDetected = false;
-                }
-                switch (currentChar) {
-                    case "+": // up octave
-                        if (x.parseState === "settings") {
-                            modifierBuffer.octaveChange++;
-                        } else {
-                            noteBuffer.noteNumber += 12;
-                        }
-                        break;
-                    case "-": // down octave
-                        if (x.parseState === "settings") {
-                            modifierBuffer.octaveChange--;
-                        } else {
-                            noteBuffer.noteNumber -= 12;
-                        }
-                        break;
-                    case "0": case "1": case "2": case "3": case "4": // fallthrough
-                    case "5": case "6": case "7": case "8": case "9":
-                        // number process
-                        if (!numberDetected) {
-                            curNumber = currentChar.charCodeAt(0)-48;
-                            numberDetected = true;
-                        } else if (floatDetect) {
-                            curNumber += currentChar; // string now
-                        } else {
-                            curNumber = curNumber * 10 + currentChar.charCodeAt(0)-48;
-                        }
-                        break;
-                    case "/":
-                        x.parseState = "settings";
-                        break;
-                    case "[":
-                        x.modifierStack.push({
-                            timeMultiplier: x.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
-                            octaveChange: x.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
-                        });
-                        modifierBuffer.timeMultiplier = 1;
-                        modifierBuffer.octaveChange = 0;
-                        // push settings on the stack
-                        x.parseState = "note entry";
-                        break;
-                    case "]":
-                        // pop settings off the stack
-                        x.modifierStack.pop();
-                        break;
-                    case "(":
-                        x.parseState = "note entry";
-                        break;
-                    default:
-                        noteBuffer.noteNumber = mapping[currentChar] || NaN;
-                }
+                curNumber = 0;
             }
-            // check if there is still input
-            if (x.stringPointer<loopLength) {
-                pq.push(x);
+            if (currentChar === ",") {
+                // advance time
+                x.millis += noteBuffer.length;
+                // advance character
+                x.stringPointer++;
+                break;
+            } else if (currentChar === ")") {
+                x.parseState = "bpm entry";
+                x.millis += noteBuffer.length;
+                // advance character
+                x.stringPointer++;
+                break;
+            }
+            // handle volume
+            if (volumeChar.soft === currentChar) {
+                if (!volumeDetected) { curVolume = 0; }
+                curVolume--;
+                volumeDetected = true;
+            } else if (volumeChar.loud === currentChar) {
+                if (!volumeDetected) { curVolume = 0; }
+                curVolume++;
+                volumeDetected = true;
+            } else if (volumeDetected) {
+                x.volume = curVolume;
+                volumeDetected = false;
+            }
+            switch (currentChar) {
+                case "+": // up octave
+                    if (x.parseState === "settings") {
+                        modifierBuffer.octaveChange++;
+                    } else {
+                        noteBuffer.noteNumber += 12;
+                    }
+                    break;
+                case "-": // down octave
+                    if (x.parseState === "settings") {
+                        modifierBuffer.octaveChange--;
+                    } else {
+                        noteBuffer.noteNumber -= 12;
+                    }
+                    break;
+                case "0": case "1": case "2": case "3": case "4": // fallthrough
+                case "5": case "6": case "7": case "8": case "9":
+                    // number process
+                    if (!numberDetected) {
+                        curNumber = currentChar.charCodeAt(0)-48;
+                        numberDetected = true;
+                    } else if (floatDetect) {
+                        curNumber += currentChar; // string now
+                    } else {
+                        curNumber = curNumber * 10 + currentChar.charCodeAt(0)-48;
+                    }
+                    break;
+                case "/":
+                    x.parseState = "settings";
+                    break;
+                case "[":
+                    x.modifierStack.push({
+                        timeMultiplier: x.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
+                        octaveChange: x.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
+                    });
+                    modifierBuffer.timeMultiplier = 1;
+                    modifierBuffer.octaveChange = 0;
+                    // push settings on the stack
+                    x.parseState = "note entry";
+                    break;
+                case "]":
+                    // pop settings off the stack
+                    x.modifierStack.pop();
+                    break;
+                case "(":
+                    x.parseState = "note entry";
+                    break;
+                default:
+                    noteBuffer.noteNumber = mapping[currentChar] || NaN;
             }
         }
+        // check if there is still input
+        if (x.stringPointer<loopLength) {
+            pq.push(x);
+        }
+    }
+    if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) {
+        // pop last element (empty)
+        this.timeFrames.pop();
     }
 };
+
 /**
  * Asynchronously constructs music from data.
  * @param {Object[]} musicData an array of song data
@@ -607,6 +635,75 @@ PlayableMusic.prototype.stop = function(manager) {
 };
 
 /**
+ * Constructs from ToneJS
+ * @param {Object} data
+ * @param {Object} info
+ */
+PlayableMusic.constructFromToneJS = function(data, info) {
+    this.title = info.title || "";
+    this.minBPM = data.header.bpm;
+    this.maxBPM = data.header.bpm;
+    this.timeFrames = []; // objects
+    this.composer = info.composer || "";
+    this.arranger = info.arranger || this.composer;
+    this.transcriber = info.transcriber || "";
+    this.length = 0;
+    var loopLength = data.tracks.length;
+    var trackProtoNotes = [];
+    for (var i=0;i<loopLength;i++) {
+        var notes = data.tracks[i].notes;
+        var trackLength = notes.length;
+        var instrument = data.tracks[i].instrument;
+        for (var j=0;j<trackLength;j++) {
+            trackProtoNotes.push({
+                startTime: notes[j].time*1000,
+                frequency: notesArr[notes[j].midi-9], // map correctly
+                length: notes[j].duration*1000,
+                volume: notes[j].velocity, // TODO: rescale properly
+                type: instrument,
+            });
+        }
+    }
+    trackProtoNotes.sort(function(a, b) {
+        return a.startTime-b.startTime;
+    });
+    var sustainedArray = [];
+    var lastSustained = -1;
+    loopLength = trackProtoNotes.length;
+    for (var i=0;i<loopLength;i++) {
+        var note = trackProtoNotes[i];
+        if (this.timeFrames.length === 0 || this.timeFrames.back().millis != Math.round(note.startTime)) {
+            this.timeFrames.push({
+                millis: Math.round(note.startTime), // round it
+                onNotes: [],
+                sustainNotes: []
+            });
+        }
+        // manage sustained notes
+        if (lastSustained<this.timeFrames.back().millis) {
+            lastSustained = this.timeFrames.back().millis;
+            var replaceSus = [];
+            var susNotes = this.timeFrames.back().sustainNotes;
+            var processLength = sustainedArray.length;
+            for (var j=0;j<processLength;j++) {
+                // add to the sustain notes
+                if (sustainedArray[j].startTime+sustainedArray[j].length>lastSustained) {
+                    susNotes.push(sustainedArray[j]);
+                    // add to the next batch
+                    replaceSus.push(sustainedArray[j]);
+                }
+            }
+            sustainedArray = replaceSus;
+        }
+        note = new PlayableNote(note);
+        sustainedArray.push(note);
+        this.timeFrames.back().onNotes.push(note);
+        this.length = Math.max(this.length, note.startTime+note.length);
+    }
+};
+PlayableMusic.constructFromToneJS.prototype = Object.create(PlayableMusic.prototype);
+
+/**
  * MusicPlayer manages the playing of PlayableMusic
  * It can store multiple PlayableMusic as a song selector.
  * @param {PlayableMusic[]} songData
@@ -678,7 +775,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = "2.1.0";
+MusicPlayer.version = "2.3.0";
 
 /**
  * Plays the selected song at time this.time.
