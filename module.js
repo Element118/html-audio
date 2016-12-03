@@ -251,15 +251,17 @@ PlayableNote.instruments = PlayableNote.createInstruments({
  */
 PlayableNote.missingInstruments = {};
 /**
- * @Deprecated in 3.0.0, also buggy since I noticed it.
+ * Lightweight test:
+ * new PlayableNote({type: "violin", frequency: 440, length: 1000, startTime: 0}).start()
  * Begins the note. Automatically stops it at the intended time.
  * Uses AudioContext.
  * @param {AudioContext} audioContext
  * @param {Object} destination Where to send the nodes to
+ * @param {Number} speed Speed to play the note at
  */
-PlayableNote.prototype.start = function(audioContext, destination) {
+PlayableNote.prototype.start = function(audioContext, destination, speed) {
     // just trying not to repeat myself
-    return this.startAt(this.startTime);
+    return this.startAt(audioContext, destination, this.startTime, speed);
 };
 /**
  * Begins the note, assuming the current song time.
@@ -722,6 +724,8 @@ var MusicPlayer = function(songData) {
     this.playingFrame = 0;
     this.speed = 1; // speed multiplier
     this.callbacks = {}; // manage callbacks in hash
+    this.inSong = false;
+    this.playLaterTimeout = undefined;
 };
 /**
  * Bind a callback to call when an event happens.
@@ -775,7 +779,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number. Doesn't do much.
  */
-MusicPlayer.version = "2.3.0";
+MusicPlayer.version = "2.4.0";
 
 /**
  * Plays the selected song at time this.time.
@@ -789,12 +793,42 @@ MusicPlayer.prototype.play = function() {
         this.volumeNode.gain.value = this.volume;
         // play
         this.playing = true;
+        this.inSong = true;
         if (this.time>=this.data[this.songIndex].length) {
             this.time = 0;
         }
         this.startTime = new Date().getTime();
         this.data[this.songIndex].play(this);
         this.callbacks.play && this.callbacks.play(this.data[this.songIndex], this);
+    }
+};
+/**
+ * @hidden
+ * Lightweight function to start. Please don't use this.
+ */
+MusicPlayer.prototype.start = function() {
+    this.audioContext = AudioContextManager.getAudioContext();
+    this.volumeNode = this.audioContext.createGain();
+    this.volumeNode.connect(this.audioContext.destination);
+    this.volumeNode.gain.value = this.volume;
+    this.time = 0;
+    this.startTime = new Date().getTime();
+    this.data[this.songIndex].play(this);
+    this.callbacks.play && this.callbacks.play(this.data[this.songIndex], this);
+    this.playLaterTimeout = undefined;
+};
+/**
+ * Plays the selected song later.
+ * @param {Number} millis milliseconds to wait 
+ */
+MusicPlayer.prototype.playLater = function(millis) {
+    if (!this.playing && 0 <= this.songIndex && this.songIndex < this.data.length) {
+        // play
+        this.playing = true;
+        this.inSong = true;
+        this.time = -millis;
+        this.startTime = new Date().getTime();
+        this.playLaterTimeout = setTimeout(this.start.bind(this), millis);
     }
 };
 /**
@@ -843,6 +877,7 @@ MusicPlayer.prototype.endSong = function() {
         this.playing = false;
         this.startTime = new Date().getTime();
         this.time = this.data[this.songIndex].length;
+        this.inSong = false;
         if (this.playAll) {
             this.songIndex++;
             this.time = 0;
@@ -865,6 +900,10 @@ MusicPlayer.prototype.endSong = function() {
  */
 MusicPlayer.prototype.pause = function() {
     if (this.playing) {
+        if (this.playLaterTimeout !== undefined) {
+            clearTimeout(this.playLaterTimeout);
+            this.playLaterTimeout = undefined;
+        }
         this.playing = false;
         this.time += (new Date().getTime()-this.startTime)*this.speed;
         this.data[this.songIndex].stop(this); // this helps it stop
@@ -1016,7 +1055,7 @@ MusicPlayer.prototype.getCurrentSongData = function() {
 };
 /**
  * Get the current time of the song. Used to calibrate PlayableMusic.
- * @return {Object} data
+ * @return {Number} time
  */
 MusicPlayer.prototype.getTime = function() {
     // Much oblivious
