@@ -171,10 +171,22 @@ var AudioContextManager = {
 if (!(window.AudioContext || window.webkitAudioContext)) {
     console.log("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
 }
-var notesArr = {};
+var equalTemperament = {};
 for (var i=0;i<100;i++) {
-    notesArr[i] = 27.5*Math.pow(2, i/12);
+    equalTemperament[i] = 27.5*Math.pow(2, i/12);
 }
+var Tuning = function(frequencies) {
+    this.frequencies = frequencies;
+};
+Tuning.prototype.getTranslatorTo = function(that) {
+    var lookupTable = [];
+    var index = 0;
+    for (var i=0;i<this.frequencies.length;i++) {
+        while (index+1<that.frequencies.length && abs(that.frequencies[index]-this.frequencies[i])>that.frequencies[index+1]-this.frequencies[i]) { index++; }
+        lookupTable.push(index);
+    }
+    return lookupTable;
+};
 
 /**
  * Construct a note to play as part of a song.
@@ -199,7 +211,7 @@ var PlayableNote = function(config) {
             // cannot recognise wave
             default:
                 if (!PlayableNote.missingInstruments[this.wave]) {
-                    console.log("No waveform for instrument \""+this.wave+"\".")
+                    console.log("No waveform for instrument \""+this.wave+"\".");
                     PlayableNote.missingInstruments[this.wave] = true;
                 }
                 this.type = "sine";
@@ -252,7 +264,7 @@ PlayableNote.instruments = PlayableNote.createInstruments({
 PlayableNote.missingInstruments = {};
 /**
  * Lightweight test:
- * new PlayableNote({type: "violin", frequency: 440, length: 1000, startTime: 0}).start()
+ * new PlayableNote({type: "violin", frequency: 440, length: 1000, startTime: 0}).start(...)
  * Begins the note. Automatically stops it at the intended time.
  * Uses AudioContext.
  * @param {AudioContext} audioContext
@@ -297,6 +309,12 @@ PlayableNote.prototype.stop = function() {
         this.oscillator.stop();
         this.oscillator = null;
     }
+};
+/**
+ * @return {String} "[Object PlayableNote]"
+ */
+PlayableNote.prototype.toString = function() {
+    return "[Object PlayableMusic]";
 };
 
 /**
@@ -417,9 +435,9 @@ var PlayableMusic = function(data) {
                 } else { // note entry
                     noteBuffer.length = curNumber / x.modifierStack.back().timeMultiplier * (60000 / x.bpm);
                     // create note
-                    if (notesArr[noteBuffer.noteNumber]) {
+                    if (equalTemperament[noteBuffer.noteNumber]) {
                         // if exists create note from the note buffer
-                        noteBuffer.frequency = notesArr[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
+                        noteBuffer.frequency = equalTemperament[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
                         noteBuffer.volume = volumeMap[x.volume] || 1;
                         var newNote = new PlayableNote(noteBuffer);
                         // add to onNotes
@@ -489,18 +507,16 @@ var PlayableMusic = function(data) {
                 case "/":
                     x.parseState = "settings";
                     break;
-                case "[":
+                case "[": // push settings on the stack
                     x.modifierStack.push({
                         timeMultiplier: x.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
                         octaveChange: x.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
                     });
                     modifierBuffer.timeMultiplier = 1;
                     modifierBuffer.octaveChange = 0;
-                    // push settings on the stack
                     x.parseState = "note entry";
                     break;
-                case "]":
-                    // pop settings off the stack
+                case "]": // pop settings off the stack
                     x.modifierStack.pop();
                     break;
                 case "(":
@@ -586,14 +602,10 @@ PlayableMusic.prototype.play = function(manager) {
                 this.playFrame(manager);
             }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
         } else {
-            manager.currentTimeout = setTimeout(function() {
-                manager.endSong(); // music tells manager to stop
-            }.bind(this), Math.max((this.length-time)/manager.speed, 0));
+            manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
         }
     } else {
-        manager.currentTimeout = setTimeout(function() {
-            manager.endSong(); // music tells manager to stop
-        }.bind(this), Math.max((this.length-time)/manager.speed, 0));
+        manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
     }
 };
 /**
@@ -613,9 +625,7 @@ PlayableMusic.prototype.playFrame = function(manager) {
             this.playFrame(manager);
         }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
     } else {
-        manager.currentTimeout = setTimeout(function() {
-            manager.endSong(); // music tells manager to stop
-        }.bind(this), Math.max((this.length-time)/manager.speed, 0));
+        manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
     }
 };
 /**
@@ -659,7 +669,7 @@ PlayableMusic.constructFromToneJS = function(data, info) {
         for (var j=0;j<trackLength;j++) {
             trackProtoNotes.push({
                 startTime: notes[j].time*1000,
-                frequency: notesArr[notes[j].midi-9], // map correctly
+                frequency: equalTemperament[notes[j].midi-9], // map correctly
                 length: notes[j].duration*1000,
                 volume: notes[j].velocity, // TODO: rescale properly
                 type: instrument,
@@ -703,6 +713,12 @@ PlayableMusic.constructFromToneJS = function(data, info) {
         this.length = Math.max(this.length, note.startTime+note.length);
     }
 };
+/**
+ * @return {String} "[Object PlayableMusic]"
+ */
+PlayableMusic.prototype.toString = function() {
+    return "[Object PlayableMusic]";
+};
 PlayableMusic.constructFromToneJS.prototype = Object.create(PlayableMusic.prototype);
 
 /**
@@ -729,7 +745,7 @@ var MusicPlayer = function(songData) {
 };
 /**
  * Bind a callback to call when an event happens.
- * The callback can accept 2 parameters: data and this
+ * The callback can accept 2 parameters: data and this (MusicPlayer instance)
  * "play"
  * "pause"
  * "loop"
@@ -777,9 +793,9 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
     this.playAll = !!playAll;
 };
 /**
- * MusicPlayer version number. Doesn't do much.
+ * MusicPlayer version number.
  */
-MusicPlayer.version = "2.4.0";
+MusicPlayer.version = "2.5.0";
 
 /**
  * Plays the selected song at time this.time.
@@ -819,14 +835,14 @@ MusicPlayer.prototype.start = function() {
 };
 /**
  * Plays the selected song later.
- * @param {Number} millis milliseconds to wait 
+ * @param {Number} millis milliseconds to wait
  */
 MusicPlayer.prototype.playLater = function(millis) {
     if (!this.playing && 0 <= this.songIndex && this.songIndex < this.data.length) {
         // play
         this.playing = true;
         this.inSong = true;
-        this.time = -millis;
+        this.time = -millis*this.speed;
         this.startTime = new Date().getTime();
         this.playLaterTimeout = setTimeout(this.start.bind(this), millis);
     }
@@ -890,6 +906,8 @@ MusicPlayer.prototype.endSong = function() {
         } else if (this.loop) {
             this.callbacks.loop && this.callbacks.loop(this.songindex, this);
             this.play(); // loop!
+        } else {
+            this.callbacks.songend && this.callbacks.songend(this.songindex, this);
         }
     }
 };
@@ -1106,7 +1124,6 @@ MusicPlayer.prototype.getTimeData = function() {
     }
 };
 /**
- * Returns some data, hopefully.
  * @return {String} "[Object MusicPlayer]"
  */
 MusicPlayer.prototype.toString = function() {
