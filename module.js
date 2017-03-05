@@ -1,30 +1,3 @@
-for (var i=0;i<100000;i+=8) {
-    clearInterval(i);
-    clearTimeout(i);
-    cancelAnimationFrame(i);
-    clearInterval(i+1);
-    clearTimeout(i+1);
-    cancelAnimationFrame(i+1);
-    clearInterval(i+2);
-    clearTimeout(i+2);
-    cancelAnimationFrame(i+2);
-    clearInterval(i+3);
-    clearTimeout(i+3);
-    cancelAnimationFrame(i+3);
-    clearInterval(i+4);
-    clearTimeout(i+4);
-    cancelAnimationFrame(i+4);
-    clearInterval(i+5);
-    clearTimeout(i+5);
-    cancelAnimationFrame(i+5);
-    clearInterval(i+6);
-    clearTimeout(i+6);
-    cancelAnimationFrame(i+6);
-    clearInterval(i+7);
-    clearTimeout(i+7);
-    cancelAnimationFrame(i+7);
-}
-
 var Priority_Queue = function(lessThan, createFrom) {
     this.data = [0];
     this.lessThan = lessThan || function(a, b) {
@@ -100,7 +73,7 @@ Priority_Queue.fixHeapHere = function(arr, size, where, lessThan) {
     }
     return null;
 };
-// using https://www.khanacademy.org/computer-programming/ast-nonsense-safe-new/5440494445920256
+
 var new_ = Object.constructor("cls", "args",
     "args = Array.prototype.slice.call(args);\n" +
     "args.unshift(undefined);\n" +
@@ -167,14 +140,42 @@ var AudioContextManager = {
         }
     }
 };
-
-if (!(window.AudioContext || window.webkitAudioContext)) {
-    console.log("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
-}
 var equalTemperament = {};
-for (var i=0;i<100;i++) {
-    equalTemperament[i] = 27.5*Math.pow(2, i/12);
-}
+(function() {
+    var i;
+    for (i=0;i<100000;i+=8) {
+        clearInterval(i);
+        clearTimeout(i);
+        cancelAnimationFrame(i);
+        clearInterval(i+1);
+        clearTimeout(i+1);
+        cancelAnimationFrame(i+1);
+        clearInterval(i+2);
+        clearTimeout(i+2);
+        cancelAnimationFrame(i+2);
+        clearInterval(i+3);
+        clearTimeout(i+3);
+        cancelAnimationFrame(i+3);
+        clearInterval(i+4);
+        clearTimeout(i+4);
+        cancelAnimationFrame(i+4);
+        clearInterval(i+5);
+        clearTimeout(i+5);
+        cancelAnimationFrame(i+5);
+        clearInterval(i+6);
+        clearTimeout(i+6);
+        cancelAnimationFrame(i+6);
+        clearInterval(i+7);
+        clearTimeout(i+7);
+        cancelAnimationFrame(i+7);
+    }
+    if (!(window.AudioContext || window.webkitAudioContext)) {
+        console.log("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
+    }
+    for (i=0;i<100;i++) {
+        equalTemperament[i] = 27.5*Math.pow(2, i/12);
+    }
+})();
 var Tuning = function(frequencies) {
     this.frequencies = frequencies;
 };
@@ -182,7 +183,7 @@ Tuning.prototype.getTranslatorTo = function(that) {
     var lookupTable = [];
     var index = 0;
     for (var i=0;i<this.frequencies.length;i++) {
-        while (index+1<that.frequencies.length && abs(that.frequencies[index]-this.frequencies[i])>that.frequencies[index+1]-this.frequencies[i]) { index++; }
+        while (index+1<that.frequencies.length && Math.abs(that.frequencies[index]-this.frequencies[i])>that.frequencies[index+1]-this.frequencies[i]) { index++; }
         lookupTable.push(index);
     }
     return lookupTable;
@@ -272,7 +273,6 @@ PlayableNote.missingInstruments = {};
  * @param {Number} speed Speed to play the note at
  */
 PlayableNote.prototype.start = function(audioContext, destination, speed) {
-    // just trying not to repeat myself
     return this.startAt(audioContext, destination, this.startTime, speed);
 };
 /**
@@ -283,6 +283,7 @@ PlayableNote.prototype.start = function(audioContext, destination, speed) {
  * @param {Object} destination Where to send the nodes to
  * @param {Number} time Time to start the note at
  * @param {Number} speed Speed to play the note at
+ * @return OscillatorNode
  */
 PlayableNote.prototype.startAt = function(audioContext, destination, time, speed) {
     speed = speed || 1; // set speed to 1 if missing
@@ -299,10 +300,10 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     this.oscillator.frequency.value = this.frequency;
     this.oscillator.start(0);
     this.oscillator.stop(audioContext.currentTime+Math.max((this.length+this.startTime-time)/1000/speed, 0));
-    return this.oscillator; // returning it won't hurt
+    return this.oscillator;
 };
 /**
- * Stops the note early.
+ * Stops the note when the function is called.
  */
 PlayableNote.prototype.stop = function() {
     if (this.oscillator) {
@@ -314,7 +315,124 @@ PlayableNote.prototype.stop = function() {
  * @return {String} "[Object PlayableNote]"
  */
 PlayableNote.prototype.toString = function() {
-    return "[Object PlayableMusic]";
+    return "[Object PlayableNote]";
+};
+
+/**
+ * Construct a note to play as part of a song.
+ * Implements attack, decay, sustain, release.
+ * Wraps around OscillatorNode
+ * @param {Object} config
+ */
+var ADSRNote = function(config) {
+    this.ADSR = config.ADSR || {
+        attack: 0.1,
+        decay: 0.1,
+        sustain: 0.9,
+        release: 0.1
+    };
+    this.startTime = config.startTime;
+    this.frequency = config.frequency;
+    this.type = config.type;
+    this.wave = this.type === "custom"?config.wave:undefined; // function
+    if (PlayableNote.instruments[this.type]) {
+        this.wave = PlayableNote.instruments[this.type];
+    }
+    if (!this.wave) {
+        switch (this.type) {
+            // known types, fallthrough
+            case "sine":
+            case "triangle":
+            case "sawtooth":
+            case "square": break;
+            // cannot recognise wave
+            default:
+                if (!PlayableNote.missingInstruments[this.wave]) {
+                    console.log("No waveform for instrument \""+this.wave+"\".");
+                    PlayableNote.missingInstruments[this.wave] = true;
+                }
+                this.type = "sine";
+        }
+    }
+    this.length = config.length; // in milliseconds
+    this.volume = config.volume;
+    if (typeof this.volume !== "number") {
+        this.volume = 1;
+    }
+    this.oscillator = null;
+};
+/**
+ * Lightweight test:
+ * new ADSRNote({type: "violin", frequency: 440, length: 1000, startTime: 0}).start(...)
+ * Begins the note. Automatically stops it at the intended time.
+ * Uses AudioContext.
+ * @param {AudioContext} audioContext
+ * @param {Object} destination Where to send the nodes to
+ * @param {Number} speed Speed to play the note at
+ */
+ADSRNote.prototype.start = function(audioContext, destination, speed) {
+    return this.startAt(audioContext, destination, this.startTime, speed);
+};
+/**
+ * Begins the note, assuming the current song time.
+ * Automatically stops it at the intended time.
+ * Uses AudioContext.
+ * @param {AudioContext} audioContext
+ * @param {Object} destination Where to send the nodes to
+ * @param {Number} time Time to start the note at
+ * @param {Number} speed Speed to play the note at
+ * @return OscillatorNode
+ */
+ADSRNote.prototype.startAt = function(audioContext, destination, time, speed) {
+    speed = speed || 1; // set speed to 1 if missing
+    this.oscillator = audioContext.createOscillator();
+    var gainNode = audioContext.createGain();
+    var offset = (time-this.startTime)/1000;
+    var initValue = false;
+    if (offset<this.ADSR.attack) {
+        initValue = true;
+        gainNode.gain.setValueAtTime(this.volume*offset/this.ADSR.attack, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(this.volume, this.ADSR.attack+audioContext.currentTime-offset);
+    }
+    if (offset<this.ADSR.attack+this.ADSR.decay) {
+        if (!initValue) gainNode.gain.setValueAtTime(this.volume*(offset-this.ADSR.attack)*(1-this.ADSR.sustain)/this.ADSR.decay+this.ADSR.sustain*this.volume, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(this.volume*this.ADSR.sustain, this.ADSR.attack+this.ADSR.decay+audioContext.currentTime-offset);
+    }
+    if (offset<this.ADSR.attack+this.length) {
+        if (!initValue) gainNode.gain.setValueAtTime(this.ADSR.sustain*this.volume, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(this.volume*this.ADSR.sustain, this.ADSR.attack+this.length/1000+audioContext.currentTime-offset);
+    }
+    if (offset<this.ADSR.attack+this.length/1000+this.ADSR.release) {
+        if (!initValue) gainNode.gain.setValueAtTime((offset-this.ADSR.attack-this.length/1000)/this.ADSR.release*this.ADSR.sustain*this.volume, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0, this.ADSR.attack+this.length/1000+this.ADSR.release+audioContext.currentTime-offset);
+    }
+    
+    this.oscillator.connect(gainNode);
+    gainNode.connect(destination || audioContext.destination);
+    if (this.wave) {
+        this.oscillator.setPeriodicWave(this.wave);
+    } else {
+        this.oscillator.type = this.type;
+    }
+    this.oscillator.frequency.value = this.frequency;
+    this.oscillator.start(0);
+    this.oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+(this.length-offset)/1000/speed, 0));
+    return this.oscillator;
+};
+/**
+ * Stops the note when the function is called.
+ */
+ADSRNote.prototype.stop = function() {
+    if (this.oscillator) {
+        this.oscillator.stop();
+        this.oscillator = null;
+    }
+};
+/**
+ * @return {String} "[Object PlayableNote]"
+ */
+ADSRNote.prototype.toString = function() {
+    return "[Object ADSRNote]";
 };
 
 /**
@@ -325,6 +443,7 @@ PlayableNote.prototype.toString = function() {
  * data.noteMapping: define a mapping between characters and notes for easy input
  *   Do not use the characters ()[]\,&+-1234567890 in the mapping
  * data.instruments: store what the instruments do
+ * data.noteConstructor: store the note constructor
  * @param {Object} data song data
  */
 var PlayableMusic = function(data) {
@@ -336,6 +455,7 @@ var PlayableMusic = function(data) {
     this.arranger = data.arranger || this.composer;
     this.transcriber = data.transcriber || "";
     this.length = 0;
+    var noteConstructor = data.noteConstructor || PlayableNote;
     var mapping = data.noteMapping; // hashtable
     var volumeChar = (data.volume && data.volume.characters) || {};
     var volumeMap = (data.volume && data.volume.mapping) || {};
@@ -380,9 +500,7 @@ var PlayableMusic = function(data) {
                 sustainNotes: []
             });
         }
-        // time frame exists.
-        // check the sustained array
-        // delete elements past the time.
+        // sustain notes
         if (lastSustained<this.timeFrames.back().millis) {
             lastSustained = this.timeFrames.back().millis;
             var replaceSus = [];
@@ -439,7 +557,7 @@ var PlayableMusic = function(data) {
                         // if exists create note from the note buffer
                         noteBuffer.frequency = equalTemperament[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
                         noteBuffer.volume = volumeMap[x.volume] || 1;
-                        var newNote = new PlayableNote(noteBuffer);
+                        var newNote = new noteConstructor(noteBuffer);
                         // add to onNotes
                         this.timeFrames.back().onNotes.push(newNote);
                         // add to sustainedArray
@@ -526,7 +644,7 @@ var PlayableMusic = function(data) {
                     noteBuffer.noteNumber = mapping[currentChar] || NaN;
             }
         }
-        // check if there is still input
+        // check for input
         if (x.stringPointer<loopLength) {
             pq.push(x);
         }
@@ -645,7 +763,6 @@ PlayableMusic.prototype.stop = function(manager) {
         }
     }
 };
-
 /**
  * Constructs from ToneJS
  * @param {Object} data
@@ -795,7 +912,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number.
  */
-MusicPlayer.version = "2.5.0";
+MusicPlayer.version = "2.6.0";
 
 /**
  * Plays the selected song at time this.time.
@@ -901,7 +1018,7 @@ MusicPlayer.prototype.endSong = function() {
                 this.songIndex = this.loop?0:-1;
                 this.loop && this.callbacks.loop && this.callbacks.loop(this.songindex, this);
             }
-            this.callbacks.songend && this.callbacks.songend(this.songindex, this);
+
             this.play();
         } else if (this.loop) {
             this.callbacks.loop && this.callbacks.loop(this.songindex, this);
@@ -990,14 +1107,14 @@ MusicPlayer.prototype.sort = function(sortFunc) {
  * Used when you hate naive shuffles.]
  */
 MusicPlayer.prototype.smartShuffle = function() {
-    var wasPlaying = this.playing;
+    var wasPlaying = this.playing, i;
     if (this.playing) {
         this.pause();
     }
     // group the songs by arranger
-    var map = new Map();
-    var arr = []; // temporary array
-    for (var i=0;i<this.data.length;i++) {
+    var map = new Map(), arr = []; // temporary array
+    i = this.data.length;
+    while (i--) {
         if (!map.has(this.data[i].arranger)) {
             map.set(this.data[i].arranger, []);
         }
@@ -1012,8 +1129,8 @@ MusicPlayer.prototype.smartShuffle = function() {
     });
     // sort
     arr.sort(function(a, b) { return a.rand-b.rand; });
-    this.data = [];
-    for (var i=0;i<arr.length;i++) {
+    i = arr.length;
+    while (i--) {
         this.data[i] = arr[i].song;
     }
     this.select(0); // reset selection
