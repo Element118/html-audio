@@ -188,19 +188,20 @@ Tuning.prototype.getTranslatorTo = function(that) {
     }
     return lookupTable;
 };
-
 /**
  * Construct a note to play as part of a song.
  * Wraps around OscillatorNode
  * @param {Object} config
  */
 var PlayableNote = function(config) {
+    this.ADSR = PlayableNote.DEFAULT_ADSR;
     this.startTime = config.startTime;
     this.frequency = config.frequency;
     this.type = config.type;
     this.wave = this.type === "custom"?config.wave:undefined; // function
     if (PlayableNote.instruments[this.type]) {
-        this.wave = PlayableNote.instruments[this.type];
+        this.wave = PlayableNote.instruments[this.type].wave;
+        this.ADSR = PlayableNote.instruments[this.type].ADSR;
     }
     if (!this.wave) {
         switch (this.type) {
@@ -225,6 +226,12 @@ var PlayableNote = function(config) {
     }
     this.oscillator = null;
 };
+PlayableNote.DEFAULT_ADSR = {
+    attack: 0.01,
+    decay: 0.01,
+    sustain: 1,
+    release: 0.01
+};
 /**
  * Modifies an object storing waveforms
  * and make them into waves which can be
@@ -235,7 +242,10 @@ PlayableNote.createInstruments = function(obj) {
     var audioContext = AudioContextManager.getAudioContext();
     for (var i in obj) {
         if (!obj[i].hasOwnProperty(i)) {
-            obj[i] = audioContext.createPeriodicWave(obj[i].real, obj[i].imag);
+            obj[i] = {
+                wave: audioContext.createPeriodicWave(obj[i].real, obj[i].imag),
+                ADSR: obj[i].ADSR
+            }
         }
     }
     AudioContextManager.releaseAudioContext();
@@ -251,11 +261,23 @@ PlayableNote.instruments = PlayableNote.createInstruments({
     },
     violin: {
         real: Float32Array.from([0.62144,0.57895,0.47158,0.31905,0.15253,0.00626,-0.09205,-0.12895,-0.10804,-0.04609,0.03530,0.11310,0.17038,0.19649,0.18810,0.14547,0.07607,-0.00906,-0.09445,-0.16319,-0.19995,-0.19556,-0.15453,-0.09045,-0.02598,0.01678,0.02718,0.00626,-0.03330,-0.07433,-0.10577,-0.12589,-0.14001,-0.15453,-0.16918,-0.17904,-0.17464,-0.15293,-0.11923,-0.08726,-0.07234,-0.08392,-0.11763,-0.15746,-0.18450,-0.18450,-0.15826,-0.11869,-0.08579,-0.07247,-0.07780,-0.08646,-0.07913,-0.04476,0.01172,0.07114,0.11163,0.12176,0.10484,0.07753,0.05502,0.04223,0.03237,0.01199,-0.02638,-0.07513,-0.11563,-0.12416,-0.08619,-0.00440,0.10297,0.21168,0.30080,0.35835,0.38685,0.39125,0.37473,0.33916,0.28348,0.21128,0.13455,0.07074,0.03690,0.04050,0.07806,0.13495,0.19223,0.23126,0.24085,0.21727,0.16798,0.10684,0.05102,0.02051,0.02851,0.07993,0.16958,0.28375,0.40018,0.49582]),
-        imag: Float32Array.from([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])
+        imag: Float32Array.from([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]),
+        ADSR: {
+            attack: 100,
+            decay: 100,
+            sustain: 0.9,
+            release: 100
+        }
     },
     piano: {
         real: Float32Array.from([-0.28068,-0.28789,-0.28867,-0.28380,-0.27464,-0.26179,-0.24737,-0.23335,-0.22010,-0.20900,-0.19946,-0.19206,-0.18465,-0.17725,-0.16849,-0.15894,-0.14628,-0.13167,-0.11590,-0.09992,-0.08415,-0.06973,-0.05843,-0.05006,-0.04480,-0.04305,-0.04441,-0.04753,-0.05064,-0.05337,-0.05571,-0.05590,-0.05493,-0.05142,-0.04616,-0.03993,-0.03292,-0.02805,-0.02649,-0.02980,-0.03779,-0.05045,-0.06642,-0.08415,-0.10207,-0.11804,-0.13050,-0.13732,-0.13849,-0.13362,-0.12427,-0.11297,-0.09992,-0.08785,-0.07713,-0.06876,-0.06350,-0.06116,-0.06019,-0.05960,-0.05727,-0.05123,-0.04071,-0.02571,-0.00779,0.01091,0.02727,0.04051,0.04928,0.05220,0.05103,0.04733,0.04285,0.03837,0.03701,0.04013,0.04811,0.06233,0.08142,0.10382,0.12563,0.14511,0.15953,0.16849,0.17258,0.17141,0.16732,0.16070,0.15232,0.14453,0.13888,0.13401,0.13167,0.13031,0.12836,0.12525,0.11979,0.11142,0.10031,0.08726,0.07168,0.05532,0.03915,0.02513,0.01363,0.00370,-0.00331,-0.01013,-0.01675,-0.02357,-0.03097,-0.03857,-0.04538,-0.05240,-0.06058,-0.06934,-0.07791,-0.08726,-0.09583,-0.10246,-0.10577,-0.10518,-0.10129,-0.09311,-0.08142,-0.06623,-0.04733,-0.02513,-0.00058,0.02454,0.04928,0.07129,0.08882,0.10323,0.11297,0.12057,0.12758,0.13343,0.14024,0.14842,0.15544,0.16206,0.16790,0.17141,0.17199,0.16868,0.16147,0.15018,0.13440,0.11706,0.09759,0.07830,0.06058,0.04441,0.03058,0.01850,0.00760,-0.00584,-0.02240,-0.04383,-0.06973,-0.09953,-0.13109,-0.16342,-0.19634,-0.22751,-0.25575,-0.27971,-0.29704]),
         imag: Float32Array.from([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]),
+        ADSR: {
+            attack: 100,
+            decay: 100,
+            sustain: 0.9,
+            release: 100
+        }
     }
 });
 /**
@@ -287,9 +309,60 @@ PlayableNote.prototype.start = function(audioContext, destination, speed) {
  */
 PlayableNote.prototype.startAt = function(audioContext, destination, time, speed) {
     speed = speed || 1; // set speed to 1 if missing
-    this.oscillator = audioContext.createOscillator();
     var gainNode = audioContext.createGain();
-    gainNode.gain.value = this.volume;
+    var offset = time-this.startTime;
+    var initValue = true;
+    var noteLength = this.length/speed;
+    var atk = this.ADSR.attack;
+    var dk = Math.min(this.ADSR.decay, noteLength-atk); 
+    var sus = this.ADSR.sustain;
+    var rel = this.ADSR.release;
+    if (noteLength < atk) {
+        if (offset < noteLength) {
+            gainNode.gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(this.volume*noteLength/atk, audioContext.currentTime+(noteLength-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength-offset+rel)/1000);
+        } else if (offset < noteLength+rel) {
+            gainNode.gain.setValueAtTime(this.volume*noteLength/atk*(rel-(offset-noteLength))/rel, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else initValue = false;
+    } else if (dk < this.ADSR.decay) {
+        if (offset < atk) {
+            gainNode.gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(this.volume, audioContext.currentTime+(atk-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(this.volume*(1-(noteLength-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime+(noteLength-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else if (offset < noteLength) {
+            gainNode.gain.setValueAtTime(this.volume*(1-(offset-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(this.volume*(1-(noteLength-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime+(noteLength-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else if (offset < noteLength+rel) {
+            gainNode.gain.setValueAtTime(this.volume*(1-dk/this.ADSR.decay*(1-sus))*(offset-noteLength)/rel, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else initValue = false;
+    } else { // noteLength >= atk+dk
+        if (offset < atk) {
+            gainNode.gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(this.volume, audioContext.currentTime+(atk-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(atk+dk-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else if (offset < atk+dk) {
+            gainNode.gain.setValueAtTime(this.volume*(1-(offset-atk)/dk*(1-sus)), audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(atk+dk-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else if (offset < noteLength) {
+            gainNode.gain.setValueAtTime(this.volume*sus, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else if (offset<noteLength+rel) {
+            gainNode.gain.setValueAtTime(this.volume*sus*(offset-noteLength)/rel, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+        } else initValue = false;
+    }
+    if (!initValue) return null;
+    this.oscillator = audioContext.createOscillator();
     this.oscillator.connect(gainNode);
     gainNode.connect(destination || audioContext.destination);
     if (this.wave) {
@@ -299,7 +372,8 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     }
     this.oscillator.frequency.value = this.frequency;
     this.oscillator.start(0);
-    this.oscillator.stop(audioContext.currentTime+Math.max((this.length+this.startTime-time)/1000/speed, 0));
+    this.oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+(this.length-offset)/1000, 0));
+    console.log(this.oscillator);
     return this.oscillator;
 };
 /**
@@ -319,123 +393,6 @@ PlayableNote.prototype.toString = function() {
 };
 
 /**
- * Construct a note to play as part of a song.
- * Implements attack, decay, sustain, release.
- * Wraps around OscillatorNode
- * @param {Object} config
- */
-var ADSRNote = function(config) {
-    this.ADSR = config.ADSR || {
-        attack: 0.1,
-        decay: 0.1,
-        sustain: 0.9,
-        release: 0.1
-    };
-    this.startTime = config.startTime;
-    this.frequency = config.frequency;
-    this.type = config.type;
-    this.wave = this.type === "custom"?config.wave:undefined; // function
-    if (PlayableNote.instruments[this.type]) {
-        this.wave = PlayableNote.instruments[this.type];
-    }
-    if (!this.wave) {
-        switch (this.type) {
-            // known types, fallthrough
-            case "sine":
-            case "triangle":
-            case "sawtooth":
-            case "square": break;
-            // cannot recognise wave
-            default:
-                if (!PlayableNote.missingInstruments[this.wave]) {
-                    console.log("No waveform for instrument \""+this.wave+"\".");
-                    PlayableNote.missingInstruments[this.wave] = true;
-                }
-                this.type = "sine";
-        }
-    }
-    this.length = config.length; // in milliseconds
-    this.volume = config.volume;
-    if (typeof this.volume !== "number") {
-        this.volume = 1;
-    }
-    this.oscillator = null;
-};
-/**
- * Lightweight test:
- * new ADSRNote({type: "violin", frequency: 440, length: 1000, startTime: 0}).start(...)
- * Begins the note. Automatically stops it at the intended time.
- * Uses AudioContext.
- * @param {AudioContext} audioContext
- * @param {Object} destination Where to send the nodes to
- * @param {Number} speed Speed to play the note at
- */
-ADSRNote.prototype.start = function(audioContext, destination, speed) {
-    return this.startAt(audioContext, destination, this.startTime, speed);
-};
-/**
- * Begins the note, assuming the current song time.
- * Automatically stops it at the intended time.
- * Uses AudioContext.
- * @param {AudioContext} audioContext
- * @param {Object} destination Where to send the nodes to
- * @param {Number} time Time to start the note at
- * @param {Number} speed Speed to play the note at
- * @return OscillatorNode
- */
-ADSRNote.prototype.startAt = function(audioContext, destination, time, speed) {
-    speed = speed || 1; // set speed to 1 if missing
-    this.oscillator = audioContext.createOscillator();
-    var gainNode = audioContext.createGain();
-    var offset = (time-this.startTime)/1000;
-    var initValue = false;
-    if (offset<this.ADSR.attack) {
-        initValue = true;
-        gainNode.gain.setValueAtTime(this.volume*offset/this.ADSR.attack, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(this.volume, this.ADSR.attack+audioContext.currentTime-offset);
-    }
-    if (offset<this.ADSR.attack+this.ADSR.decay) {
-        if (!initValue) gainNode.gain.setValueAtTime(this.volume*(offset-this.ADSR.attack)*(1-this.ADSR.sustain)/this.ADSR.decay+this.ADSR.sustain*this.volume, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(this.volume*this.ADSR.sustain, this.ADSR.attack+this.ADSR.decay+audioContext.currentTime-offset);
-    }
-    if (offset<this.ADSR.attack+this.length) {
-        if (!initValue) gainNode.gain.setValueAtTime(this.ADSR.sustain*this.volume, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(this.volume*this.ADSR.sustain, this.ADSR.attack+this.length/1000+audioContext.currentTime-offset);
-    }
-    if (offset<this.ADSR.attack+this.length/1000+this.ADSR.release) {
-        if (!initValue) gainNode.gain.setValueAtTime((offset-this.ADSR.attack-this.length/1000)/this.ADSR.release*this.ADSR.sustain*this.volume, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0, this.ADSR.attack+this.length/1000+this.ADSR.release+audioContext.currentTime-offset);
-    }
-    
-    this.oscillator.connect(gainNode);
-    gainNode.connect(destination || audioContext.destination);
-    if (this.wave) {
-        this.oscillator.setPeriodicWave(this.wave);
-    } else {
-        this.oscillator.type = this.type;
-    }
-    this.oscillator.frequency.value = this.frequency;
-    this.oscillator.start(0);
-    this.oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+(this.length-offset)/1000/speed, 0));
-    return this.oscillator;
-};
-/**
- * Stops the note when the function is called.
- */
-ADSRNote.prototype.stop = function() {
-    if (this.oscillator) {
-        this.oscillator.stop();
-        this.oscillator = null;
-    }
-};
-/**
- * @return {String} "[Object PlayableNote]"
- */
-ADSRNote.prototype.toString = function() {
-    return "[Object ADSRNote]";
-};
-
-/**
  * Constructs a data structure to hold a song out of the data object.
  * This should be optimised as much as possible.
  * data has important properties that can be set:
@@ -443,7 +400,6 @@ ADSRNote.prototype.toString = function() {
  * data.noteMapping: define a mapping between characters and notes for easy input
  *   Do not use the characters ()[]\,&+-1234567890 in the mapping
  * data.instruments: store what the instruments do
- * data.noteConstructor: store the note constructor
  * @param {Object} data song data
  */
 var PlayableMusic = function(data) {
@@ -455,7 +411,6 @@ var PlayableMusic = function(data) {
     this.arranger = data.arranger || this.composer;
     this.transcriber = data.transcriber || "";
     this.length = 0;
-    var noteConstructor = data.noteConstructor || PlayableNote;
     var mapping = data.noteMapping; // hashtable
     var volumeChar = (data.volume && data.volume.characters) || {};
     var volumeMap = (data.volume && data.volume.mapping) || {};
@@ -557,7 +512,7 @@ var PlayableMusic = function(data) {
                         // if exists create note from the note buffer
                         noteBuffer.frequency = equalTemperament[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
                         noteBuffer.volume = volumeMap[x.volume] || 1;
-                        var newNote = new noteConstructor(noteBuffer);
+                        var newNote = new_(PlayableNote, [noteBuffer]);
                         // add to onNotes
                         this.timeFrames.back().onNotes.push(newNote);
                         // add to sustainedArray
@@ -912,7 +867,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number.
  */
-MusicPlayer.version = "2.6.0";
+MusicPlayer.version = "2.7.0";
 
 /**
  * Plays the selected song at time this.time.
@@ -1018,7 +973,7 @@ MusicPlayer.prototype.endSong = function() {
                 this.songIndex = this.loop?0:-1;
                 this.loop && this.callbacks.loop && this.callbacks.loop(this.songindex, this);
             }
-
+            this.callbacks.songend && this.callbacks.songend(this.songindex, this);
             this.play();
         } else if (this.loop) {
             this.callbacks.loop && this.callbacks.loop(this.songindex, this);
