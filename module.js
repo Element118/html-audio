@@ -373,7 +373,6 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     this.oscillator.frequency.value = this.frequency;
     this.oscillator.start(0);
     this.oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+(this.length-offset)/1000, 0));
-    console.log(this.oscillator);
     return this.oscillator;
 };
 /**
