@@ -120,14 +120,23 @@ Array.prototype.shuffle = function() {
  * This manages the number of AudioContext on the page.
  * AudioContextManager.getAudioContext() gets an instance of AudioContext.
  * AudioContextManager.releaseAudioContext() releases an instance of AudioContext.
+ * AudioContextManager.storeInAudioContext tells the program to store it as a property of AudioContext.
  */
 var AudioContextManager = {
     uses: 0,
     audioContext: null,
+    storeInAudioContext: true,
+    AudioContext: (window.AudioContext || window.webkitAudioContext),
     getAudioContext: function() {
         if (this.audioContext === null) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (this.storeInAudioContext && this.AudioContext.audioContextInstance && this.AudioContext.audioContextInstance.state !== "closed") {
+                return (this.audioContext = this.AudioContext.audioContextInstance);
+            }
+            this.audioContext = new this.AudioContext();
             this.uses = 0; // just to make sure someone wasn't paranoid that they released more times than needed.
+            if (this.storeInAudioContext) {
+                this.AudioContext.audioContextInstance = this.audioContext;
+            }
         }
         this.uses++;
         return this.audioContext;
@@ -137,6 +146,9 @@ var AudioContextManager = {
         if (this.uses <= 0 && this.audioContext) { // prevent paranoid releasing
             this.audioContext.close();
             this.audioContext = null;
+            if (this.storeInAudioContext) {
+                this.AudioContext.audioContextInstance = null;
+            }
         }
     }
 };
@@ -227,10 +239,10 @@ var PlayableNote = function(config) {
     this.oscillator = null;
 };
 PlayableNote.DEFAULT_ADSR = {
-    attack: 0.01,
-    decay: 0.01,
-    sustain: 1,
-    release: 0.01
+	attack: 5, // milliseconds
+	decay: 5,
+	sustain: 0.9, // ratio
+	release: 10
 };
 /**
  * Modifies an object storing waveforms
@@ -245,7 +257,7 @@ PlayableNote.createInstruments = function(obj) {
             obj[i] = {
                 wave: audioContext.createPeriodicWave(obj[i].real, obj[i].imag),
                 ADSR: obj[i].ADSR
-            }
+            };
         }
     }
     AudioContextManager.releaseAudioContext();
@@ -286,6 +298,13 @@ PlayableNote.instruments = PlayableNote.createInstruments({
  */
 PlayableNote.missingInstruments = {};
 /**
+ * Prevents "cracking" of audio due to
+ * inaccuraccies in the browser event
+ * queue. This is a tradeoff between
+ * accuracy and "cracking".
+ */
+PlayableNote.EPSILON = 4; // empirically determined
+/**
  * Lightweight test:
  * new PlayableNote({type: "violin", frequency: 440, length: 1000, startTime: 0}).start(...)
  * Begins the note. Automatically stops it at the intended time.
@@ -311,6 +330,7 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     speed = speed || 1; // set speed to 1 if missing
     var gainNode = audioContext.createGain();
     var offset = time-this.startTime;
+    if (offset < PlayableNote.EPSILON) offset = 0;
     var initValue = true;
     var noteLength = this.length/speed;
     var atk = this.ADSR.attack;
@@ -372,7 +392,7 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     }
     this.oscillator.frequency.value = this.frequency;
     this.oscillator.start(0);
-    this.oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+(this.length-offset)/1000, 0));
+    this.oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+PlayableNote.EPSILON+(noteLength-offset)/1000, 0));
     return this.oscillator;
 };
 /**
@@ -399,6 +419,7 @@ PlayableNote.prototype.toString = function() {
  * data.noteMapping: define a mapping between characters and notes for easy input
  *   Do not use the characters ()[]\,&+-1234567890 in the mapping
  * data.instruments: store what the instruments do
+ * data.tuning: store the current tuning of the music.
  * @param {Object} data song data
  */
 var PlayableMusic = function(data) {
@@ -410,6 +431,7 @@ var PlayableMusic = function(data) {
     this.arranger = data.arranger || this.composer;
     this.transcriber = data.transcriber || "";
     this.length = 0;
+    this.tuning = data.tuning || equalTemperament;
     var mapping = data.noteMapping; // hashtable
     var volumeChar = (data.volume && data.volume.characters) || {};
     var volumeMap = (data.volume && data.volume.mapping) || {};
@@ -441,15 +463,15 @@ var PlayableMusic = function(data) {
     var sustainedArray = [];
     var lastSustained = -1;
     while (!pq.empty()) {
-        var x = pq.top(); pq.pop();
-        if (!this.timeFrames.length || Math.abs(this.timeFrames.back().millis-x.millis)>EPSILON) {
+        var curTrack = pq.top(); pq.pop();
+        if (!this.timeFrames.length || Math.abs(this.timeFrames.back().millis-curTrack.millis)>EPSILON) {
             if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) {
                 // pop last element (empty)
                 this.timeFrames.pop();
             }
             // produce new time frame
             this.timeFrames.push({
-                millis: Math.round(x.millis), // round it
+                millis: Math.round(curTrack.millis), // round it
                 onNotes: [],
                 sustainNotes: []
             });
@@ -476,48 +498,48 @@ var PlayableMusic = function(data) {
         var curNumber = 0;
         var floatDetect = false;
         var noteBuffer = {
-            startTime: Math.round(x.millis),
+            startTime: Math.round(curTrack.millis),
             noteNumber: NaN, // store note number
             frequency: 0,
             length: 0,
             volume: 1,
-            type: data.instruments[x.instrumentIndex].type,
-            wave: data.instruments[x.instrumentIndex].wave
+            type: data.instruments[curTrack.instrumentIndex].type,
+            wave: data.instruments[curTrack.instrumentIndex].wave
         };
         var modifierBuffer = {
             timeMultiplier: 1,
             octaveChange: 0
         };
-        loopLength = data.instruments[x.instrumentIndex].notes.length;
-        for (;x.stringPointer<loopLength;x.stringPointer++) {
-            var currentChar = data.instruments[x.instrumentIndex].notes[x.stringPointer];
+        loopLength = data.instruments[curTrack.instrumentIndex].notes.length;
+        for (;curTrack.stringPointer<loopLength;curTrack.stringPointer++) {
+            var currentChar = data.instruments[curTrack.instrumentIndex].notes[curTrack.stringPointer];
             if (numberDetected && !(48 <= currentChar.charCodeAt(0) && currentChar.charCodeAt(0) <= 57)) {
-                if (x.parseState === "bpm entry" && !floatDetect && currentChar === ".") {
+                if (curTrack.parseState === "bpm entry" && !floatDetect && currentChar === ".") {
                     floatDetect = true;
                     curNumber += ".";
                     continue;
                 }
                 numberDetected = false;
-                if (x.parseState === "bpm entry") {
-                    x.bpm = +curNumber;
-                    this.minBPM = Math.min(this.minBPM, x.bpm);
-                    this.maxBPM = Math.max(this.maxBPM, x.bpm);
-                } else if (x.parseState === "settings") {
+                if (curTrack.parseState === "bpm entry") {
+                    curTrack.bpm = +curNumber;
+                    this.minBPM = Math.min(this.minBPM, curTrack.bpm);
+                    this.maxBPM = Math.max(this.maxBPM, curTrack.bpm);
+                } else if (curTrack.parseState === "settings") {
                     modifierBuffer.timeMultiplier *= curNumber;
                 } else { // note entry
-                    noteBuffer.length = curNumber / x.modifierStack.back().timeMultiplier * (60000 / x.bpm);
+                    noteBuffer.length = curNumber / curTrack.modifierStack.back().timeMultiplier * (60000 / curTrack.bpm);
                     // create note
-                    if (equalTemperament[noteBuffer.noteNumber]) {
+                    if (this.tuning[noteBuffer.noteNumber]) {
                         // if exists create note from the note buffer
-                        noteBuffer.frequency = equalTemperament[noteBuffer.noteNumber+12*x.modifierStack.back().octaveChange];
-                        noteBuffer.volume = volumeMap[x.volume] || 1;
+                        noteBuffer.frequency = this.tuning[noteBuffer.noteNumber]*+(1<<curTrack.modifierStack.back().octaveChange);
+                        noteBuffer.volume = volumeMap[curTrack.volume] || 1;
                         var newNote = new_(PlayableNote, [noteBuffer]);
                         // add to onNotes
                         this.timeFrames.back().onNotes.push(newNote);
                         // add to sustainedArray
                         sustainedArray.push(newNote);
                         // update length of song
-                        this.length = Math.max(this.length, x.millis+newNote.length);
+                        this.length = Math.max(this.length, curTrack.millis+newNote.length);
                         noteBuffer.noteNumber = NaN; // ensure nothing gets played
                     }
                 }
@@ -525,15 +547,15 @@ var PlayableMusic = function(data) {
             }
             if (currentChar === ",") {
                 // advance time
-                x.millis += noteBuffer.length;
+                curTrack.millis += noteBuffer.length;
                 // advance character
-                x.stringPointer++;
+                curTrack.stringPointer++;
                 break;
             } else if (currentChar === ")") {
-                x.parseState = "bpm entry";
-                x.millis += noteBuffer.length;
+                curTrack.parseState = "bpm entry";
+                curTrack.millis += noteBuffer.length;
                 // advance character
-                x.stringPointer++;
+                curTrack.stringPointer++;
                 break;
             }
             // handle volume
@@ -546,19 +568,19 @@ var PlayableMusic = function(data) {
                 curVolume++;
                 volumeDetected = true;
             } else if (volumeDetected) {
-                x.volume = curVolume;
+                curTrack.volume = curVolume;
                 volumeDetected = false;
             }
             switch (currentChar) {
                 case "+": // up octave
-                    if (x.parseState === "settings") {
+                    if (curTrack.parseState === "settings") {
                         modifierBuffer.octaveChange++;
                     } else {
                         noteBuffer.noteNumber += 12;
                     }
                     break;
                 case "-": // down octave
-                    if (x.parseState === "settings") {
+                    if (curTrack.parseState === "settings") {
                         modifierBuffer.octaveChange--;
                     } else {
                         noteBuffer.noteNumber -= 12;
@@ -577,30 +599,30 @@ var PlayableMusic = function(data) {
                     }
                     break;
                 case "/":
-                    x.parseState = "settings";
+                    curTrack.parseState = "settings";
                     break;
                 case "[": // push settings on the stack
-                    x.modifierStack.push({
-                        timeMultiplier: x.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
-                        octaveChange: x.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
+                    curTrack.modifierStack.push({
+                        timeMultiplier: curTrack.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
+                        octaveChange: curTrack.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
                     });
                     modifierBuffer.timeMultiplier = 1;
                     modifierBuffer.octaveChange = 0;
-                    x.parseState = "note entry";
+                    curTrack.parseState = "note entry";
                     break;
                 case "]": // pop settings off the stack
-                    x.modifierStack.pop();
+                    curTrack.modifierStack.pop();
                     break;
                 case "(":
-                    x.parseState = "note entry";
+                    curTrack.parseState = "note entry";
                     break;
                 default:
                     noteBuffer.noteNumber = mapping[currentChar] || NaN;
             }
         }
         // check for input
-        if (x.stringPointer<loopLength) {
-            pq.push(x);
+        if (curTrack.stringPointer<loopLength) {
+            pq.push(curTrack);
         }
     }
     if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) {
@@ -738,13 +760,15 @@ PlayableMusic.constructFromToneJS = function(data, info) {
         var trackLength = notes.length;
         var instrument = data.tracks[i].instrument;
         for (var j=0;j<trackLength;j++) {
-            trackProtoNotes.push({
-                startTime: notes[j].time*1000,
-                frequency: equalTemperament[notes[j].midi-9], // map correctly
-                length: notes[j].duration*1000,
-                volume: notes[j].velocity, // TODO: rescale properly
-                type: instrument,
-            });
+            if (notes[j].time || notes[j].midi || notes[j].duration) {
+                trackProtoNotes.push({
+                    startTime: notes[j].time*1000,
+                    frequency: equalTemperament[notes[j].midi-9], // map correctly
+                    length: notes[j].duration*1000,
+                    volume: notes[j].velocity, // TODO: rescale properly?? Probably this is fixed
+                    type: instrument,
+                });
+            }
         }
     }
     trackProtoNotes.sort(function(a, b) {
@@ -866,7 +890,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number.
  */
-MusicPlayer.version = "2.7.0";
+MusicPlayer.version = "2.8.0";
 
 /**
  * Plays the selected song at time this.time.
