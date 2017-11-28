@@ -117,75 +117,66 @@ Array.prototype.shuffle = function() {
     }
 };
 /**
- * This manages the number of AudioContext on the page.
+ * AudioContext manager
+ * 
+ * Lazy, doesn't close instances, but keeps old instances.
+ */
+var AudioContextManager = {
+    AudioContext: (window.AudioContext || window.webkitAudioContext),
+    getAudioContext: function() {
+        if (!this.AudioContext.audioContextInstance) {
+            this.AudioContext.audioContextInstance = this.audioContext = new this.AudioContext();
+        }
+        return this.AudioContext.audioContextInstance;
+    },
+    releaseAudioContext: function() {
+        //
+    }
+};
+/**
  * AudioContextManager.getAudioContext() gets an instance of AudioContext.
  * AudioContextManager.releaseAudioContext() releases an instance of AudioContext.
  * AudioContextManager.storeInAudioContext tells the program to store it as a property of AudioContext.
  */
-var AudioContextManager = {
-    uses: 0,
-    audioContext: null,
-    storeInAudioContext: true,
-    AudioContext: (window.AudioContext || window.webkitAudioContext),
-    getAudioContext: function() {
-        if (this.audioContext === null) {
-            if (this.storeInAudioContext && this.AudioContext.audioContextInstance && this.AudioContext.audioContextInstance.state !== "closed") {
-                return (this.audioContext = this.AudioContext.audioContextInstance);
+var useEagerAudioContextManager = function() {
+    AudioContextManager = {
+        uses: 0,
+        audioContext: null,
+        storeInAudioContext: true,
+        AudioContext: (window.AudioContext || window.webkitAudioContext),
+        getAudioContext: function() {
+            if (this.audioContext === null) {
+                if (this.storeInAudioContext && this.AudioContext.audioContextInstance && this.AudioContext.audioContextInstance.state !== "closed") {
+                    return (this.audioContext = this.AudioContext.audioContextInstance);
+                }
+                this.audioContext = new this.AudioContext();
+                this.uses = 0; // just to make sure someone wasn't paranoid that they released more times than needed.
+                if (this.storeInAudioContext) {
+                    this.AudioContext.audioContextInstance = this.audioContext;
+                }
             }
-            this.audioContext = new this.AudioContext();
-            this.uses = 0; // just to make sure someone wasn't paranoid that they released more times than needed.
-            if (this.storeInAudioContext) {
-                this.AudioContext.audioContextInstance = this.audioContext;
+            this.uses++;
+            return this.audioContext;
+        },
+        releaseAudioContext: function() {
+            this.uses--;
+            if (this.uses <= 0 && this.audioContext) { // prevent paranoid releasing
+                this.audioContext.close();
+                this.audioContext = null;
+                if (this.storeInAudioContext) {
+                    this.AudioContext.audioContextInstance = null;
+                }
             }
         }
-        this.uses++;
-        return this.audioContext;
-    },
-    releaseAudioContext: function() {
-        this.uses--;
-        if (this.uses <= 0 && this.audioContext) { // prevent paranoid releasing
-            this.audioContext.close();
-            this.audioContext = null;
-            if (this.storeInAudioContext) {
-                this.AudioContext.audioContextInstance = null;
-            }
-        }
-    }
+    };
 };
 var equalTemperament = {};
 (function() {
-    var i;
-    for (i=0;i<100000;i+=8) {
-        clearInterval(i);
-        clearTimeout(i);
-        cancelAnimationFrame(i);
-        clearInterval(i+1);
-        clearTimeout(i+1);
-        cancelAnimationFrame(i+1);
-        clearInterval(i+2);
-        clearTimeout(i+2);
-        cancelAnimationFrame(i+2);
-        clearInterval(i+3);
-        clearTimeout(i+3);
-        cancelAnimationFrame(i+3);
-        clearInterval(i+4);
-        clearTimeout(i+4);
-        cancelAnimationFrame(i+4);
-        clearInterval(i+5);
-        clearTimeout(i+5);
-        cancelAnimationFrame(i+5);
-        clearInterval(i+6);
-        clearTimeout(i+6);
-        cancelAnimationFrame(i+6);
-        clearInterval(i+7);
-        clearTimeout(i+7);
-        cancelAnimationFrame(i+7);
-    }
     if (!(window.AudioContext || window.webkitAudioContext)) {
         console.log("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
     }
     // Make sure all MIDI notes are supported
-    for (i=-9;i<=118;i++) {
+    for (var i=-9;i<=118;i++) {
         equalTemperament[i] = 27.5*Math.pow(2, i/12);
     }
 })();
@@ -200,6 +191,14 @@ Tuning.prototype.getTranslatorTo = function(that) {
         lookupTable.push(index);
     }
     return lookupTable;
+};
+var getEqualTemperamentTuning = function(config) {
+    var baseFrequency = config.baseFrequency || 440;
+    var divisions = config.divisions || 12;
+    var baseFrequencyNoteNumber = config.baseFrequencyNoteNumber || 10;
+    var baseRatio = config.baseRatio || 2;
+    // build a tuning...
+    // return
 };
 
 /**
@@ -316,7 +315,7 @@ var PlayableTone = function(config) {
     if (typeof this.volume !== "number") {
         this.volume = 1;
     }
-    this.oscillator = null;
+    this.node = null;
 };
 /**
  * Lightweight test:
@@ -342,30 +341,30 @@ PlayableTone.prototype.start = function(audioContext, destination, speed) {
  */
 PlayableTone.prototype.startAt = function(audioContext, destination, time, speed) {
     speed = speed || 1; // set speed to 1 if missing
-    var gainNode = audioContext.createGain();
+    this.node = audioContext.createGain();
     var offset = time-this.startTime;
     var noteLength = this.length/speed;
-    this.oscillator = audioContext.createOscillator();
-    this.oscillator.connect(gainNode);
-    gainNode.gain.value = this.volume;
-    gainNode.connect(destination || audioContext.destination);
+    var oscillator = audioContext.createOscillator();
+    oscillator.connect(this.node);
+    this.node.gain.value = this.volume;
+    this.node.connect(destination || audioContext.destination);
     if (this.wave) {
-        this.oscillator.setPeriodicWave(this.wave);
+        oscillator.setPeriodicWave(this.wave);
     } else {
-        this.oscillator.type = this.type;
+        oscillator.type = this.type;
     }
-    this.oscillator.frequency.value = this.frequency;
-    this.oscillator.start(0);
-    this.oscillator.stop(audioContext.currentTime+Math.max((noteLength-offset)/1000, 0));
-    return this.oscillator;
+    oscillator.frequency.value = this.frequency;
+    oscillator.start(0);
+    oscillator.stop(audioContext.currentTime+Math.max((noteLength-offset)/1000, 0));
+    return this.node;
 };
 /**
  * Stops the note when the function is called.
  */
 PlayableTone.prototype.stop = function() {
-    if (this.oscillator) {
-        this.oscillator.stop();
-        this.oscillator = null;
+    if (this.node) {
+        this.node.gain.value = 0;
+        this.node = null;
     }
 };
 /**
@@ -409,7 +408,7 @@ var PlayableNote = function(config) {
     if (typeof this.volume !== "number") {
         this.volume = 1;
     }
-    this.oscillator = null;
+    this.node = null;
 };
 PlayableNote.DEFAULT_ADSR = {
 	attack: 5, // milliseconds
@@ -438,6 +437,7 @@ PlayableNote.prototype = Object.create(PlayableTone.prototype);
 PlayableNote.prototype.startAt = function(audioContext, destination, time, speed) {
     speed = speed || 1; // set speed to 1 if missing
     var gainNode = audioContext.createGain();
+    var gain = gainNode.gain;
     var offset = time-this.startTime;
     if (offset < PlayableNote.EPSILON) offset = 0;
     var initValue = true;
@@ -448,61 +448,64 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     var rel = this.ADSR.release;
     if (noteLength < atk) {
         if (offset < noteLength) {
-            gainNode.gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(this.volume*noteLength/atk, audioContext.currentTime+(noteLength-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength-offset+rel)/1000);
+            gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
+            gain.linearRampToValueAtTime(this.volume*noteLength/atk, audioContext.currentTime+(noteLength-offset)/1000);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength-offset+rel)/1000);
         } else if (offset < noteLength+rel) {
-            gainNode.gain.setValueAtTime(this.volume*noteLength/atk*(rel-(offset-noteLength))/rel, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*noteLength/atk*(rel-(offset-noteLength))/rel, audioContext.currentTime);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else initValue = false;
     } else if (dk < this.ADSR.decay) {
         if (offset < atk) {
-            gainNode.gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(this.volume, audioContext.currentTime+(atk-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(this.volume*(1-(noteLength-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime+(noteLength-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
+            gain.linearRampToValueAtTime(this.volume, audioContext.currentTime+(atk-offset)/1000);
+            gain.linearRampToValueAtTime(this.volume*(1-(noteLength-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime+(noteLength-offset)/1000);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else if (offset < noteLength) {
-            gainNode.gain.setValueAtTime(this.volume*(1-(offset-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(this.volume*(1-(noteLength-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime+(noteLength-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*(1-(offset-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime);
+            gain.linearRampToValueAtTime(this.volume*(1-(noteLength-atk)/this.ADSR.decay*(1-sus)), audioContext.currentTime+(noteLength-offset)/1000);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else if (offset < noteLength+rel) {
-            gainNode.gain.setValueAtTime(this.volume*(1-dk/this.ADSR.decay*(1-sus))*(offset-noteLength)/rel, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*(1-dk/this.ADSR.decay*(1-sus))*(offset-noteLength)/rel, audioContext.currentTime);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else initValue = false;
     } else { // noteLength >= atk+dk
         if (offset < atk) {
-            gainNode.gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(this.volume, audioContext.currentTime+(atk-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(atk+dk-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
+            gain.linearRampToValueAtTime(this.volume, audioContext.currentTime+(atk-offset)/1000);
+            gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(atk+dk-offset)/1000);
+            gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else if (offset < atk+dk) {
-            gainNode.gain.setValueAtTime(this.volume*(1-(offset-atk)/dk*(1-sus)), audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(atk+dk-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*(1-(offset-atk)/dk*(1-sus)), audioContext.currentTime);
+            gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(atk+dk-offset)/1000);
+            gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else if (offset < noteLength) {
-            gainNode.gain.setValueAtTime(this.volume*sus, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*sus, audioContext.currentTime);
+            gain.linearRampToValueAtTime(this.volume*sus, audioContext.currentTime+(noteLength-offset)/1000);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else if (offset<noteLength+rel) {
-            gainNode.gain.setValueAtTime(this.volume*sus*(offset-noteLength)/rel, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
+            gain.setValueAtTime(this.volume*sus*(offset-noteLength)/rel, audioContext.currentTime);
+            gain.linearRampToValueAtTime(0, audioContext.currentTime+(noteLength+rel-offset)/1000);
         } else initValue = false;
     }
     if (!initValue) return null;
-    this.oscillator = audioContext.createOscillator();
-    this.oscillator.connect(gainNode);
-    gainNode.connect(destination || audioContext.destination);
+    var oscillator = audioContext.createOscillator();
+    oscillator.connect(gainNode);
+    this.node = audioContext.createGain();
+    this.node.gain.value = 1;
+    gainNode.connect(this.node);
+    this.node.connect(destination || audioContext.destination);
     if (this.wave) {
-        this.oscillator.setPeriodicWave(this.wave);
+        oscillator.setPeriodicWave(this.wave);
     } else {
-        this.oscillator.type = this.type;
+        oscillator.type = this.type;
     }
-    this.oscillator.frequency.value = this.frequency;
-    this.oscillator.start(0);
-    this.oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+PlayableNote.EPSILON+(noteLength-offset)/1000, 0));
-    return this.oscillator;
+    oscillator.frequency.value = this.frequency;
+    oscillator.start(0);
+    oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+PlayableNote.EPSILON+(noteLength-offset)/1000, 0));
+    return this.node;
 };
 /**
  * @return {String} "[Object PlayableNote]"
@@ -512,12 +515,102 @@ PlayableNote.prototype.toString = function() {
 };
 
 /**
+ * Easter egg!
+ * @param {Object} config
+ */
+var ShepardTone = function(config) {
+    this.startTime = config.startTime;
+    this.frequency = config.frequency;
+    this.type = config.type;
+    this.wave = this.type === "custom"?config.wave:undefined; // function
+    if (!this.wave) {
+        switch (this.type) {
+            // known types, fallthrough
+            case "sine":
+            case "triangle":
+            case "sawtooth":
+            case "square": break;
+            // cannot recognise wave
+            default:
+                var instrument = Instruments.getInstrument(this.type);
+                if (instrument) {
+                    this.wave = instrument.wave;
+                }
+                this.type = "sine";
+        }
+    }
+    this.length = config.length; // in milliseconds
+    this.volume = config.volume;
+    if (typeof this.volume !== "number") {
+        this.volume = 1;
+    }
+    this.node = null;
+};
+ShepardTone.mu = Math.log2(440);
+ShepardTone.sigma = 1;
+ShepardTone.quality = 20;
+ShepardTone.prototype = Object.create(PlayableTone.prototype);
+/**
+ * Lightweight test:
+ * new PlayableTone({type: "violin", frequency: 440, length: 1000, startTime: 0}).start(...)
+ * Begins the note. Automatically stops it at the intended time.
+ * Uses AudioContext.
+ * @param {AudioContext} audioContext
+ * @param {Object} destination Where to send the nodes to
+ * @param {Number} speed Speed to play the note at
+ */
+ShepardTone.prototype.start = function(audioContext, destination, speed) {
+    return this.startAt(audioContext, destination, this.startTime, speed);
+};
+/**
+ * Begins the note, assuming the current song time.
+ * Automatically stops it at the intended time.
+ * Uses AudioContext.
+ * @param {AudioContext} audioContext
+ * @param {Object} destination Where to send the nodes to
+ * @param {Number} time Time to start the note at
+ * @param {Number} speed Speed to play the note at
+ * @return OscillatorNode
+ */
+ShepardTone.prototype.startAt = function(audioContext, destination, time, speed) {
+    speed = speed || 1; // set speed to 1 if missing
+    this.node = audioContext.createGain();
+    var offset = time-this.startTime;
+    var noteLength = this.length/speed;
+    var baseFreq = this.frequency * Math.pow(2, Math.round(ShepardTone.mu-Math.log2(this.frequency)));
+    for (var i=0;i<ShepardTone.quality;i++) {
+        var oscillator = audioContext.createOscillator();
+        var gain = audioContext.createGain();
+        var zValue = (Math.log2(baseFreq)-ShepardTone.mu+(i%2?-(i-1)/2:i/2))/ShepardTone.sigma;
+        gain.gain.value = Math.exp(-zValue*zValue/2)/ShepardTone.sigma/Math.sqrt(2*Math.PI);
+        oscillator.connect(gain);
+        if (this.wave) {
+            oscillator.setPeriodicWave(this.wave);
+        } else {
+            oscillator.type = this.type;
+        }
+        oscillator.frequency.value = baseFreq * Math.pow(2, (i%2?-(i-1)/2:i/2));
+        oscillator.start(0);
+        oscillator.stop(audioContext.currentTime+Math.max((noteLength-offset)/1000, 0));
+        gain.connect(this.node);
+    }
+    this.node.gain.value = this.volume;
+    this.node.connect(destination || audioContext.destination);
+    return this.node;
+};
+/**
+ * @return {String} "[Object PlayableTone]"
+ */
+ShepardTone.prototype.toString = function() {
+    return "[Object ShepardTone]";
+};
+
+/**
  * Constructs a data structure to hold a song out of the data object.
  * This should be optimised as much as possible.
  * data has important properties that can be set:
  * data.title: title of the song
- * data.noteMapping: define a mapping between characters and notes for easy input
- *   Do not use the characters ()[]\,&+-1234567890 in the mapping
+ * data.noteMapping: define a mapping between characters and notes for easy input, do not use the characters ()[]\,&+-1234567890 in the mapping
  * data.instruments: store what the instruments do
  * data.tuning: store the current tuning of the music.
  * data.noteConstructor: store the note constructor
@@ -661,12 +754,14 @@ var PlayableMusic = function(data) {
                 break;
             }
             // handle volume
+            // volume is specified by a contiguous sequence of volume characters
+            // the resulting volume is the number of loud characters - the number of soft characters
             if (volumeChar.soft === currentChar) {
-                if (!volumeDetected) { curVolume = 0; }
+                if (!volumeDetected) curVolume = 0;
                 curVolume--;
                 volumeDetected = true;
             } else if (volumeChar.loud === currentChar) {
-                if (!volumeDetected) { curVolume = 0; }
+                if (!volumeDetected) curVolume = 0;
                 curVolume++;
                 volumeDetected = true;
             } else if (volumeDetected) {
@@ -826,6 +921,60 @@ PlayableMusic.prototype.playFrame = function(manager) {
     }
 };
 /**
+ * With the help of a manager, play the music at a certain time.
+ * However, if frames are delayed, no notes are to be skipped or shortened considerably.
+ * @param {MusicPlayer} manager
+ */
+PlayableMusic.prototype.playWithoutSkipping = function(manager) {
+    var time = manager.getTime(), frame = this.getFrame(time), i, curFrame;
+    manager.playingFrame = frame;
+    // start notes
+    if (frame<this.timeFrames.length) {
+        i = (curFrame = this.timeFrames[frame]).onNotes.length;
+        while (i--) {
+            curFrame.onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
+        }
+        i = curFrame.sustainNotes.length;
+        while (i--) {
+            curFrame.sustainNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
+        }
+        if (frame+1<this.timeFrames.length) {
+            manager.setTime(time);
+            manager.currentTimeout = setTimeout(function() {
+                manager.playingFrame++;
+                this.playFrameWithoutSkipping(manager);
+            }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
+        } else {
+            manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
+        }
+    } else {
+        manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
+    }
+};
+/**
+ * With the help of a manager, play the music at a certain frame
+ * However, if frames are delayed, no notes are to be skipped or shortened considerably.
+ * This should not be normally called.
+ * @param {MusicPlayer} manager
+ */
+PlayableMusic.prototype.playFrameWithoutSkipping = function(manager) {
+    var frame = manager.playingFrame, time, i, curFrame;
+    i = (curFrame = this.timeFrames[frame]).onNotes.length;
+    time = curFrame.millis;
+    while (i--) {
+        curFrame.onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
+    }
+    if (frame+1<this.timeFrames.length) {
+        manager.setTime(time);
+        manager.currentTimeout = setTimeout(function() {
+            manager.playingFrame++;
+            this.playFrameWithoutSkipping(manager);
+        }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
+    } else {
+        manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
+    }
+};
+/**
  * With the help of a manager, stop the music now.
  * @param {MusicPlayer} manager
  */
@@ -939,10 +1088,13 @@ var MusicPlayer = function(songData) {
     this.playAll = false;
     this.volume = 1; // volume multiplier
     this.playingFrame = 0;
+    this.pitchShift = 0; // pitch shift (cents)
     this.speed = 1; // speed multiplier
     this.callbacks = {}; // manage callbacks in hash
     this.inSong = false;
     this.playLaterTimeout = undefined;
+    // If it lags, do we skip notes?
+    this.skipWhenLag = true;
 };
 /**
  * Bind a callback to call when an event happens.
@@ -996,7 +1148,7 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number.
  */
-MusicPlayer.version = "2.11.1";
+MusicPlayer.version = "3.0.0b1";
 
 /**
  * Plays the selected song at time this.time.
@@ -1015,24 +1167,13 @@ MusicPlayer.prototype.play = function() {
             this.time = 0;
         }
         this.startTime = Date.now();
-        this.data[this.songIndex].play(this);
+        if (this.skipWhenLag) {
+            this.data[this.songIndex].play(this);
+        } else {
+            this.data[this.songIndex].playWithoutSkipping(this);
+        }
         this.callbacks.play && this.callbacks.play(this.data[this.songIndex], this);
     }
-};
-/**
- * @hidden
- * Lightweight function to start. Please don't use this.
- */
-MusicPlayer.prototype.start = function() {
-    this.audioContext = AudioContextManager.getAudioContext();
-    this.volumeNode = this.audioContext.createGain();
-    this.volumeNode.connect(this.audioContext.destination);
-    this.volumeNode.gain.value = this.volume;
-    this.time = 0;
-    this.startTime = Date.now();
-    this.data[this.songIndex].play(this);
-    this.callbacks.play && this.callbacks.play(this.data[this.songIndex], this);
-    this.playLaterTimeout = undefined;
 };
 /**
  * Plays the selected song later.
@@ -1282,25 +1423,13 @@ MusicPlayer.prototype.getTime = function() {
     return Math.round(this.time + (Date.now() - this.startTime)*this.speed);
 };
 /**
- * @deprecated in 3.0.0, use getTimeData instead.
- * Get the data of the current playing song.
- * @return {Object} data
+ * Set the current time of the song. Used to calibrate MusicPlayer when it lags.
+ * @return {Number} time
  */
-MusicPlayer.prototype.getCurrentPlayingData = function() {
-    if (this.songIndex === -1) {
-        return {
-            time: 0,
-        };
-    }
-    if (this.playing) {
-        return {
-            time: Math.round(this.time + (Date.now() - this.startTime)*this.speed)/1000
-        };
-    } else {
-        return {
-            time: Math.round(this.time)/1000
-        };
-    }
+MusicPlayer.prototype.setTime = function(time) {
+    // Much oblivious
+    this.time = time;
+    this.startTime = Date.now();
 };
 /**
  * Get the time-related data of the current playing song.
