@@ -128,47 +128,7 @@ var AudioContextManager = {
             this.AudioContext.audioContextInstance = this.audioContext = new this.AudioContext();
         }
         return this.AudioContext.audioContextInstance;
-    },
-    releaseAudioContext: function() {
-        //
     }
-};
-/**
- * AudioContextManager.getAudioContext() gets an instance of AudioContext.
- * AudioContextManager.releaseAudioContext() releases an instance of AudioContext.
- * AudioContextManager.storeInAudioContext tells the program to store it as a property of AudioContext.
- */
-var useEagerAudioContextManager = function() {
-    AudioContextManager = {
-        uses: 0,
-        audioContext: null,
-        storeInAudioContext: true,
-        AudioContext: (window.AudioContext || window.webkitAudioContext),
-        getAudioContext: function() {
-            if (this.audioContext === null) {
-                if (this.storeInAudioContext && this.AudioContext.audioContextInstance && this.AudioContext.audioContextInstance.state !== "closed") {
-                    return (this.audioContext = this.AudioContext.audioContextInstance);
-                }
-                this.audioContext = new this.AudioContext();
-                this.uses = 0; // just to make sure someone wasn't paranoid that they released more times than needed.
-                if (this.storeInAudioContext) {
-                    this.AudioContext.audioContextInstance = this.audioContext;
-                }
-            }
-            this.uses++;
-            return this.audioContext;
-        },
-        releaseAudioContext: function() {
-            this.uses--;
-            if (this.uses <= 0 && this.audioContext) { // prevent paranoid releasing
-                this.audioContext.close();
-                this.audioContext = null;
-                if (this.storeInAudioContext) {
-                    this.AudioContext.audioContextInstance = null;
-                }
-            }
-        }
-    };
 };
 var equalTemperament = {};
 (function() {
@@ -221,7 +181,6 @@ var Instruments = (function() {
                 };
             }
         }
-        AudioContextManager.releaseAudioContext();
         return obj;
     };
     /**
@@ -579,6 +538,8 @@ ShepardTone.prototype.startAt = function(audioContext, destination, time, speed)
     var noteLength = this.length/speed;
     var baseFreq = this.frequency * Math.pow(2, Math.round(ShepardTone.mu-Math.log2(this.frequency)));
     for (var i=0;i<ShepardTone.quality;i++) {
+        var freq = baseFreq * Math.pow(2, (i%2?-(i-1)/2:i/2));
+        if (freq > 24000) continue;
         var oscillator = audioContext.createOscillator();
         var gain = audioContext.createGain();
         var zValue = (Math.log2(baseFreq)-ShepardTone.mu+(i%2?-(i-1)/2:i/2))/ShepardTone.sigma;
@@ -589,7 +550,7 @@ ShepardTone.prototype.startAt = function(audioContext, destination, time, speed)
         } else {
             oscillator.type = this.type;
         }
-        oscillator.frequency.value = baseFreq * Math.pow(2, (i%2?-(i-1)/2:i/2));
+        oscillator.frequency.value = freq;
         oscillator.start(0);
         oscillator.stop(audioContext.currentTime+Math.max((noteLength-offset)/1000, 0));
         gain.connect(this.node);
@@ -999,6 +960,7 @@ PlayableMusic.prototype.stop = function(manager) {
  * @param {Object} info
  */
 PlayableMusic.constructFromToneJS = function(data, info) {
+    info = info || {};
     this.title = info.title || "";
     this.minBPM = data.header.bpm;
     this.maxBPM = data.header.bpm;
@@ -1078,12 +1040,12 @@ PlayableMusic.constructFromToneJS.prototype = Object.create(PlayableMusic.protot
  */
 var MusicPlayer = function(songData) {
     this.data = songData || []; // store song data as array of playable music
-    this.songIndex = -1;
+    this.songIndex = 0; // decided to select 0 by default
     this.playing = false;
     this.time = 0;
     this.startTime = 0;
     this.currentTimeout = undefined;
-    this.audioContext = null;
+    this.audioContext = AudioContextManager.getAudioContext();
     this.loop = false;
     this.playAll = false;
     this.volume = 1; // volume multiplier
@@ -1148,15 +1110,13 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number.
  */
-MusicPlayer.version = "3.0.0b1";
+MusicPlayer.version = "3.0.0b2";
 
 /**
  * Plays the selected song at time this.time.
  */
 MusicPlayer.prototype.play = function() {
     if (!this.playing && 0 <= this.songIndex && this.songIndex < this.data.length) {
-        // generate AudioContext
-        this.audioContext = AudioContextManager.getAudioContext();
         this.volumeNode = this.audioContext.createGain();
         this.volumeNode.connect(this.audioContext.destination);
         this.volumeNode.gain.value = this.volume;
@@ -1230,8 +1190,6 @@ MusicPlayer.prototype.setSpeed = function(speed) {
  */
 MusicPlayer.prototype.endSong = function() {
     if (this.playing) {
-        // release AudioContext
-        AudioContextManager.releaseAudioContext();
         this.playing = false;
         this.startTime = Date.now();
         this.time = this.data[this.songIndex].length;
@@ -1267,8 +1225,6 @@ MusicPlayer.prototype.pause = function() {
         this.playing = false;
         this.time += (Date.now()-this.startTime)*this.speed;
         this.data[this.songIndex].stop(this); // this helps it stop
-        AudioContextManager.releaseAudioContext();
-        this.audioContext = null;
         this.callbacks.pause && this.callbacks.pause();
     }
 };
@@ -1464,15 +1420,13 @@ MusicPlayer.prototype.toString = function() {
 var module = {
     Priority_Queue: Priority_Queue,
     AudioContextManager: AudioContextManager,
+    Instruments: Instruments,
+    PlayableTone: PlayableTone,
     PlayableNote: PlayableNote,
+    ShepardTone: ShepardTone,
     PlayableMusic: PlayableMusic,
     MusicPlayer: MusicPlayer
 };
-/**
- * @hidden
- * Used to export modules for this:
- * https://www.khanacademy.org/computer-programming/bens-module-system/4728010161913856?qa_expand_key=ag5zfmtoYW4tYWNhZGVteXJpCxIIVXNlckRhdGEiRnVzZXJfaWRfa2V5X2h0dHA6Ly9pZC5raGFuYWNhZGVteS5vcmcvMzY5YWZiZDA0YTc5NGQ0OGJiODQyNDVlM2IyNmI5NDAMCxIIRmVlZGJhY2sYgICAwP-tngoM
- */
 var export_module;
 if (export_module) {
     export_module(module);
