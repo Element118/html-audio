@@ -1,5 +1,5 @@
 # ka-html-audio
-A module for audio using AudioContext for Khanacademy's HTML environment
+A module using the AudioContext Web API to create chiptune music in the browser
 
 <h2>Features</h2>
 <hr>
