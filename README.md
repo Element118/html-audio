@@ -1,4 +1,4 @@
-# ka-html-audio
+# html-audio
 A module using the AudioContext Web API to create chiptune music in the browser
 
 <h2>Features</h2>
