@@ -1,19 +1,20 @@
+//jshint esversion: 6
 var Priority_Queue = function(lessThan, createFrom) {
     this.data = [0];
     this.lessThan = lessThan || function(a, b) {
         return a < b;
     };
     if (createFrom) {
-        for (var i=0;i<createFrom.length;i++) {
+        for (let i=0;i<createFrom.length;i++) {
             this.data.push(createFrom[i]);
         }
-        for (var i=(createFrom.length+1)<<1;i;i--) {
+        for (let i=(createFrom.length+1)<<1;i;i--) {
             this.fixHeap(i);
         }
     }
 };
 Priority_Queue.prototype.fixHeap = function(where) {
-    var l = where<<1;
+    let l = where<<1;
     if (l >= this.data.length) {
         return 0;
     }
@@ -21,7 +22,7 @@ Priority_Queue.prototype.fixHeap = function(where) {
         l++;
     }
     if (this.lessThan(this.data[where], this.data[l])) {
-        var temp = this.data[where];
+        let temp = this.data[where];
         this.data[where] = this.data[l];
         this.data[l] = temp;
         this.fixHeap(l);
@@ -46,7 +47,7 @@ Priority_Queue.prototype.pop = function() {
     this.remove(1);
 };
 Priority_Queue.prototype.push = function(what) {
-    var position = this.data.length >> 1;
+    let position = this.data.length >> 1;
     this.data.push(what);
     while (position && this.fixHeap(position)) {
         position = position >> 1;
@@ -59,13 +60,13 @@ Priority_Queue.prototype.size = function() {
     return this.data.length-1;
 };
 Priority_Queue.fixHeapHere = function(arr, size, where, lessThan) {
-    var l = (where<<1)+1;
+    let l = (where<<1)+1;
     if (l < size) {
         if (l+1 < size && lessThan(arr[l], arr[l+1])) {
             l++;
         }
         if (lessThan(arr[where], arr[l])) {
-            var temp = arr[where];
+            let temp = arr[where];
             arr[where] = arr[l];
             arr[l] = temp;
             return l;
@@ -73,42 +74,33 @@ Priority_Queue.fixHeapHere = function(arr, size, where, lessThan) {
     }
     return null;
 };
-
-var new_ = Object.constructor("cls", "args",
-    "args = Array.prototype.slice.call(args);\n" +
-    "args.unshift(undefined);\n" +
-    "var obj = new (Function.prototype.bind.apply(cls, args))();\n" +
-    "obj.constructor = cls;\n" + // In most cases this line can be removed
-    "return obj;"
-);
 Priority_Queue.heapsortNoPQ = function(arr, lessThan) {
     lessThan = lessThan || function(a, b) {
         return a<b;
     };
-    var l = arr.length;
-    for (var i=(l+1)<<1;i>=0;i--) {
+    let l = arr.length;
+    for (let i=(l+1)<<1;i>=0;i--) {
         Priority_Queue.fixHeap(arr, l, i, lessThan);
     }
-    for (var i=l-1;i>=0;i--) {
-        var temp = arr[i];
+    for (let i=l-1;i>=0;i--) {
+        let temp = arr[i];
         arr[i] = arr[0];
         arr[0] = temp;
         Priority_Queue.fixHeap(arr, i, 0, lessThan);
     }
 };
 Priority_Queue.heapsort = function(arr, lessThan) {
-    var pq = new_(Priority_Queue, [lessThan, arr]);
-    for (var i=arr.length-1;i>=0;i--) {
+    let pq = Priority_Queue(lessThan, arr);
+    for (let i=arr.length-1;i>=0;i--) {
         arr[i] = pq.top();
         pq.pop();
     }
 };
-
 Array.prototype.back = function() {
     return this[this.length-1];
 };
 Array.prototype.shuffle = function() {
-    var r, temp, i = this.length;
+    let r, temp, i = this.length;
     for (i=this.length;i>0;i--) {
         r = Math.floor(Math.random()*i);
         temp = this[i-1];
@@ -118,8 +110,7 @@ Array.prototype.shuffle = function() {
 };
 /**
  * AudioContext manager
- * 
- * Lazy, doesn't close instances, but keeps old instances.
+ * Lazy, keeps old instances.
  */
 var AudioContextManager = {
     AudioContext: (window.AudioContext || window.webkitAudioContext),
@@ -136,7 +127,7 @@ var equalTemperament = {};
         console.log("This will not work with the browser you are currently using due to this browser not supporting the Web Audio API. Please use Chrome, Firefox, Safari or Edge.");
     }
     // Make sure all MIDI notes are supported
-    for (var i=-9;i<=118;i++) {
+    for (let i=-9;i<=118;i++) {
         equalTemperament[i] = 27.5*Math.pow(2, i/12);
     }
 })();
@@ -144,23 +135,22 @@ var Tuning = function(frequencies) {
     this.frequencies = frequencies;
 };
 Tuning.prototype.getTranslatorTo = function(that) {
-    var lookupTable = [];
-    var index = 0;
-    for (var i=0;i<this.frequencies.length;i++) {
+    let lookupTable = [];
+    let index = 0;
+    for (let i=0;i<this.frequencies.length;i++) {
         while (index+1<that.frequencies.length && Math.abs(that.frequencies[index]-this.frequencies[i])>that.frequencies[index+1]-this.frequencies[i]) { index++; }
         lookupTable.push(index);
     }
     return lookupTable;
 };
 var getEqualTemperamentTuning = function(config) {
-    var baseFrequency = config.baseFrequency || 440;
-    var divisions = config.divisions || 12;
-    var baseFrequencyNoteNumber = config.baseFrequencyNoteNumber || 10;
-    var baseRatio = config.baseRatio || 2;
+    let baseFrequency = config.baseFrequency || 440;
+    let divisions = config.divisions || 12;
+    let baseFrequencyNoteNumber = config.baseFrequencyNoteNumber || 10;
+    let baseRatio = config.baseRatio || 2;
     // build a tuning...
     // return
 };
-
 /**
  * Store instrument data and process it.
  */
@@ -171,9 +161,9 @@ var Instruments = (function() {
      * played later.
      * @param {Object} A hashtable of instruments.
      */
-    var createInstruments = function(obj) {
-        var audioContext = AudioContextManager.getAudioContext();
-        for (var i in obj) {
+    let createInstruments = function(obj) {
+        let audioContext = AudioContextManager.getAudioContext();
+        for (let i in obj) {
             if (!obj[i].hasOwnProperty(i)) {
                 obj[i] = {
                     wave: audioContext.createPeriodicWave(obj[i].real, obj[i].imag),
@@ -186,7 +176,7 @@ var Instruments = (function() {
     /**
      * An array of default instruments.
      */
-    var instruments = createInstruments({
+    let instruments = createInstruments({
         sample1: {
             real: Float32Array.from([0, 1, 1.5, 0]),
             imag: Float32Array.from([0, 0, 0, 0]),
@@ -222,12 +212,12 @@ var Instruments = (function() {
      * An object to store all the instruments
      * which cannot be found.
      */
-    var missingInstruments = {};
+    let missingInstruments = {};
     /**
      * Get instrument by name
      * If missing, returns null
      */
-    var getInstrument = function(name) {
+    let getInstrument = function(name) {
         if (instruments[name]) {
             return instruments[name];
         }
@@ -301,9 +291,9 @@ PlayableTone.prototype.start = function(audioContext, destination, speed) {
 PlayableTone.prototype.startAt = function(audioContext, destination, time, speed) {
     speed = speed || 1; // set speed to 1 if missing
     this.node = audioContext.createGain();
-    var offset = time-this.startTime;
-    var noteLength = this.length/speed;
-    var oscillator = audioContext.createOscillator();
+    let offset = time-this.startTime;
+    let noteLength = this.length/speed;
+    let oscillator = audioContext.createOscillator();
     oscillator.connect(this.node);
     this.node.gain.value = this.volume;
     this.node.connect(destination || audioContext.destination);
@@ -312,7 +302,7 @@ PlayableTone.prototype.startAt = function(audioContext, destination, time, speed
     } else {
         oscillator.type = this.type;
     }
-    oscillator.frequency.value = this.frequency;
+    oscillator.frequency.setValueAtTime(this.frequency, audioContext.currentTime);
     oscillator.start(0);
     oscillator.stop(audioContext.currentTime+Math.max((noteLength-offset)/1000, 0));
     return this.node;
@@ -395,16 +385,17 @@ PlayableNote.prototype = Object.create(PlayableTone.prototype);
  */
 PlayableNote.prototype.startAt = function(audioContext, destination, time, speed) {
     speed = speed || 1; // set speed to 1 if missing
-    var gainNode = audioContext.createGain();
-    var gain = gainNode.gain;
-    var offset = time-this.startTime;
+    let gainNode = audioContext.createGain();
+    let gain = gainNode.gain;
+    let offset = time-this.startTime;
     if (offset < PlayableNote.EPSILON) offset = 0;
-    var initValue = true;
-    var noteLength = this.length/speed;
-    var atk = this.ADSR.attack;
-    var dk = Math.min(this.ADSR.decay, noteLength-atk); 
-    var sus = this.ADSR.sustain;
-    var rel = this.ADSR.release;
+    let initValue = true;
+    let noteLength = this.length/speed;
+    let atk = this.ADSR.attack;
+    let dk = Math.min(this.ADSR.decay, noteLength-atk); 
+    let sus = this.ADSR.sustain;
+    let rel = this.ADSR.release;
+    // @TODO refactor??
     if (noteLength < atk) {
         if (offset < noteLength) {
             gain.setValueAtTime(this.volume*offset/atk, audioContext.currentTime);
@@ -450,7 +441,7 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
         } else initValue = false;
     }
     if (!initValue) return null;
-    var oscillator = audioContext.createOscillator();
+    let oscillator = audioContext.createOscillator();
     oscillator.connect(gainNode);
     this.node = audioContext.createGain();
     this.node.gain.value = 1;
@@ -461,7 +452,7 @@ PlayableNote.prototype.startAt = function(audioContext, destination, time, speed
     } else {
         oscillator.type = this.type;
     }
-    oscillator.frequency.value = this.frequency;
+    oscillator.frequency.setValueAtTime(this.frequency, audioContext.currentTime);
     oscillator.start(0);
     oscillator.stop(audioContext.currentTime+Math.max(this.ADSR.release+PlayableNote.EPSILON+(noteLength-offset)/1000, 0));
     return this.node;
@@ -474,14 +465,19 @@ PlayableNote.prototype.toString = function() {
 };
 
 /**
- * Easter egg!
+ * ShepardTone
+ * A tone which allows you to "play rising frequencies" but still remain audible.
  * @param {Object} config
  */
 var ShepardTone = function(config) {
     this.startTime = config.startTime;
     this.frequency = config.frequency;
     this.type = config.type;
-    this.wave = this.type === "custom"?config.wave:undefined; // function
+    this.mu = config.mu || ShepardTone.DEFAULT_SETTINGS.mu;
+    this.sigma = config.sigma || ShepardTone.DEFAULT_SETTINGS.sigma;
+    this.quality = config.quality || ShepardTone.DEFAULT_SETTINGS.quality;
+    this.period = 1 || ShepardTone.DEFAULT_SETTINGS.period;
+    this.wave = this.type === "custom"?config.wave:undefined;
     if (!this.wave) {
         switch (this.type) {
             // known types, fallthrough
@@ -505,9 +501,12 @@ var ShepardTone = function(config) {
     }
     this.node = null;
 };
-ShepardTone.mu = Math.log2(440);
-ShepardTone.sigma = 1;
-ShepardTone.quality = 20;
+ShepardTone.DEFAULT_SETTINGS = {
+    mu: Math.log2(440),
+    sigma: 1,
+    quality: 20,
+    period: 1 // octaves
+};
 ShepardTone.prototype = Object.create(PlayableTone.prototype);
 /**
  * Lightweight test:
@@ -534,38 +533,231 @@ ShepardTone.prototype.start = function(audioContext, destination, speed) {
 ShepardTone.prototype.startAt = function(audioContext, destination, time, speed) {
     speed = speed || 1; // set speed to 1 if missing
     this.node = audioContext.createGain();
-    var offset = time-this.startTime;
-    var noteLength = this.length/speed;
-    var baseFreq = this.frequency * Math.pow(2, Math.round(ShepardTone.mu-Math.log2(this.frequency)));
-    for (var i=0;i<ShepardTone.quality;i++) {
-        var freq = baseFreq * Math.pow(2, (i%2?-(i-1)/2:i/2));
+    let offset = time-this.startTime;
+    let noteLength = this.length/speed;
+    let baseFreq = this.frequency * Math.pow(2, Math.round(this.mu-Math.log2(this.frequency)));
+    for (let i=0;i<this.quality;i++) {
+        let freq = baseFreq * Math.pow(2, (i%2?-(i-1)/2*this.period:i/2*this.period));
         if (freq > 24000) continue;
-        var oscillator = audioContext.createOscillator();
-        var gain = audioContext.createGain();
-        var zValue = (Math.log2(baseFreq)-ShepardTone.mu+(i%2?-(i-1)/2:i/2))/ShepardTone.sigma;
-        gain.gain.value = Math.exp(-zValue*zValue/2)/ShepardTone.sigma/Math.sqrt(2*Math.PI);
+        let oscillator = audioContext.createOscillator();
+        let gain = audioContext.createGain();
+        let zValue = (Math.log2(baseFreq)-this.mu+(i%2?-(i-1)/2:i/2))/this.sigma;
+        gain.gain.value = Math.exp(-zValue*zValue/2)/this.sigma/Math.sqrt(2*Math.PI);
         oscillator.connect(gain);
         if (this.wave) {
             oscillator.setPeriodicWave(this.wave);
         } else {
             oscillator.type = this.type;
         }
-        oscillator.frequency.value = freq;
+        oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
         oscillator.start(0);
         oscillator.stop(audioContext.currentTime+Math.max((noteLength-offset)/1000, 0));
         gain.connect(this.node);
     }
-    this.node.gain.value = this.volume;
+    this.node.gain.setTargetAtTime(this.volume, audioContext.currentTime, 0);
     this.node.connect(destination || audioContext.destination);
     return this.node;
 };
 /**
- * @return {String} "[Object PlayableTone]"
+ * @return {String} "[Object ShepardTone]"
  */
 ShepardTone.prototype.toString = function() {
     return "[Object ShepardTone]";
 };
 
+// Token { type: "", value: "" }
+/**
+ * Lexer for music representation
+ */
+var NoteLexer = function(source, volumeControls) {
+    this.position = 0;
+    this.source = source;
+    this.volumeSoft = (volumeControls && volumeControls.soft) || "";
+    this.volumeLoud = (volumeControls && volumeControls.loud) || "";
+};
+NoteLexer.prototype.getNextToken = function() {
+    let currentChar = this.source[this.position]; this.position++;
+    if (currentChar === undefined) {
+        return null;
+    } else if (currentChar === this.volumeSoft || currentChar === this.volumeLoud) {
+        let curVolume = currentChar === this.volumeSoft?-1:1;
+        while (this.source[this.position] === this.volumeSoft || this.source[this.position] === "-") {
+            curVolume += this.source[this.position]===this.volumeSoft?1:-1;
+            this.position++;
+        }
+        return { type: "volume", value: curVolume };
+    }
+    switch (currentChar) {
+        case ",": return { type: "chordEnd", value: "," };
+        case "(": case ")": return { type: "section", value: currentChar };
+        case "/": case "[": case "]": return { type: "settings", value: currentChar };
+        case "+": case "-": // octave
+            var octave = currentChar==="+"?1:-1;
+            while (this.source[this.position] === "+" || this.source[this.position] === "-") {
+                octave += this.source[this.position]==="+"?1:-1;
+                this.position++;
+            }
+            return { type: "octave", value: octave }; 
+        case "0": case "1": case "2": case "3": case "4":
+        case "5": case "6": case "7": case "8": case "9":
+            var curNumber = currentChar;
+            var code = this.source.charCodeAt(this.position);
+            while (code===46 || 48<=code && code<=57) {
+                curNumber += this.source[this.position++];
+                code = this.source.charCodeAt(this.position);
+            }
+            return { type: "number", value: +curNumber };
+        default:
+            return { type: "note", value: currentChar };
+    }
+};
+/**
+ * PlayableMixin which is supported by Track, PlayableMusic and ToneJSPlayableMusic
+ */
+var PlayableMixin = {
+    /**
+     * Get the last frame of music before the time.
+     * @param {Number} time in milliseconds
+     * @return the last frame of music
+     */
+    getFrame: function(time) {
+        let low = 0, high = this.timeFrames.length;
+        while (low+1<high) {
+            let mid = Math.floor((low+high)/2);
+            if (this.timeFrames[mid].millis > time) {
+                high = mid;
+            } else if (this.timeFrames[mid].millis < time) {
+                low = mid;
+            } else {
+                low = mid;
+                high = mid+1;
+            }
+        }
+        return low;
+    },
+    /**
+     * With the help of a manager, play the music at a certain time.
+     * @param {MusicPlayer} manager
+     */
+    play: function(manager) {
+        let time = manager.getTime(), frame = this.getFrame(time), i, curFrame;
+        manager.playingData = frame;
+        // start notes
+        if (frame<this.timeFrames.length) {
+            i = (curFrame = this.timeFrames[frame]).onNotes.length;
+            while (i--) {
+                curFrame.onNotes[i].startAt(manager.audioContext, manager.destination, time, manager.speed);
+            }
+            i = curFrame.sustainNotes.length;
+            while (i--) {
+                curFrame.sustainNotes[i].startAt(manager.audioContext, manager.destination, time, manager.speed);
+            }
+            if (frame+1<this.timeFrames.length) {
+                manager.currentTimeout = setTimeout(function() {
+                    manager.playingData++;
+                    this.playFrame(manager);
+                }.bind(this), Math.max((this.timeFrames[frame+1].millis-manager.getTime())/manager.speed, 0));
+            } else {
+                manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
+            }
+        } else {
+            manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
+        }
+    },
+    /**
+     * With the help of a manager, play the music at a certain frame.
+     * This should not be normally called.
+     * @param {MusicPlayer} manager
+     */
+    playFrame: function(manager) {
+        let frame = manager.playingData, time = manager.getTime(), i, curFrame;
+        i = (curFrame = this.timeFrames[frame]).onNotes.length;
+        while (i--) {
+            curFrame.onNotes[i].startAt(manager.audioContext, manager.destination, time, manager.speed);
+        }
+        if (frame+1<this.timeFrames.length) {
+            manager.currentTimeout = setTimeout(function() {
+                manager.playingData++;
+                this.playFrame(manager);
+            }.bind(this), Math.max((this.timeFrames[frame+1].millis-manager.getTime())/manager.speed, 0));
+        } else {
+            manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
+        }
+    },
+    /**
+     * With the help of a manager, play the music at a certain time.
+     * However, if frames are delayed, no notes are to be skipped or shortened considerably.
+     * @param {MusicPlayer} manager
+     */
+    playWithoutSkipping: function(manager) {
+        let time = manager.getTime(), frame = this.getFrame(time), i, curFrame;
+        manager.playingData = frame;
+        // start notes
+        if (frame<this.timeFrames.length) {
+            i = (curFrame = this.timeFrames[frame]).onNotes.length;
+            while (i--) {
+                curFrame.onNotes[i].startAt(manager.audioContext, manager.destination, time, manager.speed);
+            }
+            i = curFrame.sustainNotes.length;
+            while (i--) {
+                curFrame.sustainNotes[i].startAt(manager.audioContext, manager.destination, time, manager.speed);
+            }
+            if (frame+1<this.timeFrames.length) {
+                manager.setTime(time);
+                manager.currentTimeout = setTimeout(function() {
+                    manager.playingData++;
+                    this.playFrameWithoutSkipping(manager);
+                }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
+            } else {
+                manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
+            }
+        } else {
+            manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
+        }
+    },
+    /**
+     * With the help of a manager, play the music at a certain frame
+     * However, if frames are delayed, no notes are to be skipped or shortened considerably.
+     * This should not be normally called.
+     * @param {MusicPlayer} manager
+     */
+    playFrameWithoutSkipping: function(manager) {
+        let frame = manager.playingData, time, i, curFrame;
+        i = (curFrame = this.timeFrames[frame]).onNotes.length;
+        time = curFrame.millis;
+        while (i--) {
+            curFrame.onNotes[i].startAt(manager.audioContext, manager.destination, time, manager.speed);
+        }
+        if (frame+1<this.timeFrames.length) {
+            manager.setTime(time);
+            manager.currentTimeout = setTimeout(function() {
+                manager.playingData++;
+                this.playFrameWithoutSkipping(manager);
+            }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
+        } else {
+            manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
+        }
+    },
+    /**
+     * With the help of a manager, stop the music now.
+     * @param {MusicPlayer} manager
+     */
+    stop: function(manager) {
+        clearTimeout(manager.currentTimeout); // should be responsible for it.
+        let frame = manager.playingData, i, curFrame;
+        if (frame<this.timeFrames.length) {
+            // stop everything
+            i = (curFrame = this.timeFrames[frame]).onNotes.length;
+            while (i--) {
+                curFrame.onNotes[i].stop();
+            }
+            i = curFrame.sustainNotes.length;
+            while (i--) {
+                curFrame.sustainNotes[i].stop();
+            }
+        }
+    }
+};
 /**
  * Constructs a data structure to hold a song out of the data object.
  * This should be optimised as much as possible.
@@ -573,37 +765,34 @@ ShepardTone.prototype.toString = function() {
  * data.title: title of the song
  * data.noteMapping: define a mapping between characters and notes for easy input, do not use the characters ()[]\,&+-1234567890 in the mapping
  * data.instruments: store what the instruments do
- * data.tuning: store the current tuning of the music.
- * data.noteConstructor: store the note constructor
+ * data.tuning: store the current tuning of the music
+ * data.noteConstructor: store the note constructor [MARKED FOR POSSIBLE DEPRECATION]
+ * data.defaultNoteConstructor: store default note constructor
  * @param {Object} data song data
  */
 var PlayableMusic = function(data) {
     this.title = data.title || "";
-    this.minBPM = Infinity;
-    this.maxBPM = 0;
-    this.timeFrames = []; // objects
+    this.minBPM = Infinity; this.maxBPM = 0;
+    this.timeFrames = [];
     this.composer = data.composer || "";
     this.arranger = data.arranger || this.composer;
     this.transcriber = data.transcriber || "";
     this.length = 0;
     this.tuning = data.tuning || equalTemperament;
-    var noteConstructor = data.noteConstructor || PlayableNote;
-    var mapping = data.noteMapping; // hashtable
-    var volumeChar = (data.volume && data.volume.characters) || {};
-    var volumeMap = (data.volume && data.volume.mapping) || {};
-    var EPSILON = 0.5; // honestly, anything less than a 0.5 millisecond difference doesn't matter much. We can't even show the difference for <1 ms.
-    // I think I need to process in parallel...
-    var initPQ = [];
-    // I can expect to have hundreds of instruments
-    var i = data.instruments.length;
-    while (i--) { // backwards loop
+    let defaultNoteConstructor = data.defaultNoteConstructor || data.noteConstructor || PlayableNote;
+    let mapping = data.noteMapping; // hashtable
+    let volumeChar = (data.volume && data.volume.characters) || {};
+    let volumeMap = (data.volume && data.volume.mapping) || {};
+    let EPSILON = 0.5;
+    let initPQ = [];
+    let i = data.instruments.length;
+    while (i--) {
+        let lexer = new NoteLexer(data.instruments[i].notes, volumeChar);
         initPQ.push({
             instrumentIndex: i,
-            stringPointer: 0,
+            lexer: lexer,
             millis: 0,
-            bpm: 0,
-            // 0 is default volume
-            // volume exists outside the stack
+            bpm: 0, // 0 is default volume, volume exists outside the stack
             volume: 0,
             parseState: "bpm entry",
             modifierStack: [{
@@ -612,48 +801,34 @@ var PlayableMusic = function(data) {
             }],
         });
     }
-    var pq = new Priority_Queue(function(a, b) {
+    let pq = new Priority_Queue(function(a, b) {
         return a.millis>b.millis;
     }, initPQ);
     // array to store sustained notes.
-    var sustainedArray = [];
-    var lastSustained = -1;
+    let sustainedArray = [];
+    let lastSustained = -1;
     while (!pq.empty()) {
-        var curTrack = pq.top(); pq.pop();
-        if (!this.timeFrames.length || Math.abs(this.timeFrames.back().millis-curTrack.millis)>EPSILON) {
-            if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) {
-                // pop last element (empty)
+        let curTrack = pq.top(); pq.pop();
+        if (!this.timeFrames.length || Math.floor(curTrack.millis)-this.timeFrames.back().millis>EPSILON) {
+            if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) { // pop last element (empty)
                 this.timeFrames.pop();
             }
-            // produce new time frame
             this.timeFrames.push({
-                millis: Math.round(curTrack.millis), // round it
+                millis: Math.round(curTrack.millis),
                 onNotes: [],
                 sustainNotes: []
-            });
+            }); // produce new time frame
         }
-        // sustain notes
-        if (lastSustained<this.timeFrames.back().millis) {
+        if (lastSustained<this.timeFrames.back().millis) { // sustain notes
             lastSustained = this.timeFrames.back().millis;
-            var replaceSus = [];
-            var susNotes = this.timeFrames.back().sustainNotes;
-            i = sustainedArray.length;
-            while (i--) {
-                // add to the sustain notes
-                if (sustainedArray[i].startTime+sustainedArray[i].length>lastSustained) {
-                    susNotes.push(sustainedArray[i]);
-                    // add to the next batch
-                    replaceSus.push(sustainedArray[i]);
-                }
-            }
-            sustainedArray = replaceSus;
+            let replaceSus = [];
+            sustainedArray = sustainedArray.filter(function(note) {
+                return note.startTime + note.length > lastSustained;
+            });
+            this.timeFrames.back().sustainNotes = sustainedArray.slice(0);
         }
-        var numberDetected = false;
-        var volumeDetected = false;
-        var curVolume;
-        var curNumber = 0;
-        var floatDetect = false;
-        var noteBuffer = {
+        let noteConstructor = data.instruments[curTrack.instrumentIndex].noteConstructor || defaultNoteConstructor;
+        let noteBuffer = {
             startTime: Math.round(curTrack.millis),
             noteNumber: NaN, // store note number
             frequency: 0,
@@ -662,133 +837,78 @@ var PlayableMusic = function(data) {
             type: data.instruments[curTrack.instrumentIndex].type,
             wave: data.instruments[curTrack.instrumentIndex].wave
         };
-        var modifierBuffer = {
+        let modifierBuffer = {
             timeMultiplier: 1,
             octaveChange: 0
         };
-        var loopLength = data.instruments[curTrack.instrumentIndex].notes.length;
-        for (;curTrack.stringPointer<loopLength;curTrack.stringPointer++) {
-            var currentChar = data.instruments[curTrack.instrumentIndex].notes[curTrack.stringPointer];
-            if (numberDetected && !(48 <= currentChar.charCodeAt(0) && currentChar.charCodeAt(0) <= 57)) {
-                if (curTrack.parseState === "bpm entry" && !floatDetect && currentChar === ".") {
-                    floatDetect = true;
-                    curNumber += ".";
+        let getToken = true;
+        while (getToken) {
+            let token = curTrack.lexer.getNextToken();
+            if (!token) { getToken = false; break; }
+            switch (token.type) {
+                case "volume":
+                    curTrack.volume = token.value;
+                    break;
+                case "chordEnd":
+                    curTrack.millis += noteBuffer.length;
+                    getToken = false;
                     continue;
-                }
-                numberDetected = false;
-                if (curTrack.parseState === "bpm entry") {
-                    curTrack.bpm = +curNumber;
-                    this.minBPM = Math.min(this.minBPM, curTrack.bpm);
-                    this.maxBPM = Math.max(this.maxBPM, curTrack.bpm);
-                } else if (curTrack.parseState === "settings") {
-                    modifierBuffer.timeMultiplier *= curNumber;
-                } else { // note entry
-                    noteBuffer.length = curNumber / curTrack.modifierStack.back().timeMultiplier * (60000 / curTrack.bpm);
-                    // create note
-                    if (this.tuning[noteBuffer.noteNumber]) {
-                        // if exists create note from the note buffer
-                        noteBuffer.frequency = this.tuning[noteBuffer.noteNumber]*Math.pow(2, curTrack.modifierStack.back().octaveChange);
-                        noteBuffer.volume = volumeMap[curTrack.volume] || 1;
-                        var newNote = new_(noteConstructor, [noteBuffer]);
-                        // add to onNotes
-                        this.timeFrames.back().onNotes.push(newNote);
-                        // add to sustainedArray
-                        sustainedArray.push(newNote);
-                        // update length of song
-                        this.length = Math.max(this.length, curTrack.millis+newNote.length);
-                        noteBuffer.noteNumber = NaN; // ensure nothing gets played
-                    }
-                }
-                curNumber = 0;
-            }
-            if (currentChar === ",") {
-                // advance time
-                curTrack.millis += noteBuffer.length;
-                // advance character
-                curTrack.stringPointer++;
-                break;
-            } else if (currentChar === ")") {
-                curTrack.parseState = "bpm entry";
-                curTrack.millis += noteBuffer.length;
-                // advance character
-                curTrack.stringPointer++;
-                break;
-            }
-            // handle volume
-            // volume is specified by a contiguous sequence of volume characters
-            // the resulting volume is the number of loud characters - the number of soft characters
-            if (volumeChar.soft === currentChar) {
-                if (!volumeDetected) curVolume = 0;
-                curVolume--;
-                volumeDetected = true;
-            } else if (volumeChar.loud === currentChar) {
-                if (!volumeDetected) curVolume = 0;
-                curVolume++;
-                volumeDetected = true;
-            } else if (volumeDetected) {
-                curTrack.volume = curVolume;
-                volumeDetected = false;
-            }
-            switch (currentChar) {
-                case "+": // up octave
-                    if (curTrack.parseState === "settings") {
-                        modifierBuffer.octaveChange++;
-                    } else {
-                        noteBuffer.noteNumber += 12;
+                case "octave":
+                    if (curTrack.parseState === "settings") modifierBuffer.octaveChange += token.value; else noteBuffer.noteNumber += token.value*12;
+                    break;
+                case "settings":
+                    if (token.value === "/") {
+                        curTrack.parseState = "settings";
+                    } else if (token.value === "[") {
+                        curTrack.modifierStack.push({
+                            timeMultiplier: curTrack.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
+                            octaveChange: curTrack.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
+                        });
+                        modifierBuffer.timeMultiplier = 1;
+                        modifierBuffer.octaveChange = 0;
+                        curTrack.parseState = "note entry";
+                    } else { // "]"
+                        curTrack.modifierStack.pop();
                     }
                     break;
-                case "-": // down octave
-                    if (curTrack.parseState === "settings") {
-                        modifierBuffer.octaveChange--;
-                    } else {
-                        noteBuffer.noteNumber -= 12;
+                case "section":
+                    if (token.value === ")") {
+                        curTrack.parseState = "bpm entry";
+                        curTrack.millis += noteBuffer.length;
+                        getToken = false;
+                    } else { // "("
+                        curTrack.parseState = "note entry";
                     }
                     break;
-                case "0": case "1": case "2": case "3": case "4": // fallthrough
-                case "5": case "6": case "7": case "8": case "9":
-                    // number process
-                    if (!numberDetected) {
-                        curNumber = currentChar.charCodeAt(0)-48;
-                        numberDetected = true;
-                    } else if (floatDetect) {
-                        curNumber += currentChar; // string now
-                    } else {
-                        curNumber = curNumber * 10 + currentChar.charCodeAt(0)-48;
+                case "number":
+                    if (curTrack.parseState === "bpm entry") {
+                        curTrack.bpm = token.value;
+                        this.minBPM = Math.min(this.minBPM, curTrack.bpm);
+                        this.maxBPM = Math.max(this.maxBPM, curTrack.bpm);
+                    } else if (curTrack.parseState === "settings") {
+                        modifierBuffer.timeMultiplier *= token.value;
+                    } else { // note entry
+                        noteBuffer.length = token.value / curTrack.modifierStack.back().timeMultiplier * (60000 / curTrack.bpm);
+                        if (this.tuning[noteBuffer.noteNumber]) { // create note
+                            noteBuffer.frequency = this.tuning[noteBuffer.noteNumber]*Math.pow(2, curTrack.modifierStack.back().octaveChange);
+                            noteBuffer.volume = volumeMap[curTrack.volume] || 1;
+                            let newNote = new noteConstructor(noteBuffer);
+                            this.timeFrames.back().onNotes.push(newNote);
+                            sustainedArray.push(newNote);
+                            this.length = Math.max(this.length, curTrack.millis+newNote.length); // update length of song
+                            noteBuffer.noteNumber = NaN; // ensure nothing gets played
+                        }
                     }
                     break;
-                case "/":
-                    curTrack.parseState = "settings";
+                case "note":
+                    noteBuffer.noteNumber = mapping[token.value] || NaN;
                     break;
-                case "[": // push settings on the stack
-                    curTrack.modifierStack.push({
-                        timeMultiplier: curTrack.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
-                        octaveChange: curTrack.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
-                    });
-                    modifierBuffer.timeMultiplier = 1;
-                    modifierBuffer.octaveChange = 0;
-                    curTrack.parseState = "note entry";
-                    break;
-                case "]": // pop settings off the stack
-                    curTrack.modifierStack.pop();
-                    break;
-                case "(":
-                    curTrack.parseState = "note entry";
-                    break;
-                default:
-                    noteBuffer.noteNumber = mapping[currentChar] || NaN;
             }
         }
-        // check for input
-        if (curTrack.stringPointer<loopLength) {
-            pq.push(curTrack);
-        }
+        if (curTrack.lexer.position<curTrack.lexer.source.length) pq.push(curTrack); // more input
     }
-    if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) {
-        // pop last element (empty)
-        this.timeFrames.pop();
-    }
+    if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) this.timeFrames.pop(); // remove empty last timeframe
 };
-
 /**
  * Asynchronously constructs music from data.
  * @param {Object[]} musicData an array of song data
@@ -797,9 +917,9 @@ var PlayableMusic = function(data) {
  */
 PlayableMusic.async_construction = function(musicData, timeDelay) {
     timeDelay = timeDelay || 200;
-    var p = new Promise(function(resolve, reject) {
-        var index = 0;
-        var constructionInterval = setInterval(function() {
+    return new Promise(function(resolve, reject) {
+        let index = 0;
+        let constructionInterval = setInterval(function() {
             if (index < musicData.length) {
                 musicData[index] = new PlayableMusic(musicData[index]);
                 index++;
@@ -810,156 +930,20 @@ PlayableMusic.async_construction = function(musicData, timeDelay) {
             }
         }, timeDelay);
     });
-    return p;
 };
+Object.assign(PlayableMusic.prototype, PlayableMixin);
 /**
- * Get the last frame of music before the time.
- * @param {Number} time in milliseconds
- * @return the last frame of music
+ * @return {String} "[Object PlayableMusic]"
  */
-PlayableMusic.prototype.getFrame = function(time) {
-    var low = 0, high = this.timeFrames.length;
-    while (low+1<high) {
-        var mid = Math.floor((low+high)/2);
-        if (this.timeFrames[mid].millis > time) {
-            high = mid;
-        } else if (this.timeFrames[mid].millis < time) {
-            low = mid;
-        } else {
-            low = mid;
-            high = mid+1;
-        }
-    }
-    return low;
-};
-/**
- * With the help of a manager, play the music at a certain time.
- * @param {MusicPlayer} manager
- */
-PlayableMusic.prototype.play = function(manager) {
-    var time = manager.getTime(), frame = this.getFrame(time), i, curFrame;
-    manager.playingFrame = frame;
-    // start notes
-    if (frame<this.timeFrames.length) {
-        i = (curFrame = this.timeFrames[frame]).onNotes.length;
-        while (i--) {
-            curFrame.onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
-        }
-        i = curFrame.sustainNotes.length;
-        while (i--) {
-            curFrame.sustainNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
-        }
-        if (frame+1<this.timeFrames.length) {
-            manager.currentTimeout = setTimeout(function() {
-                manager.playingFrame++;
-                this.playFrame(manager);
-            }.bind(this), Math.max((this.timeFrames[frame+1].millis-manager.getTime())/manager.speed, 0));
-        } else {
-            manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
-        }
-    } else {
-        manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
-    }
-};
-/**
- * With the help of a manager, play the music at a certain frame.
- * This should not be normally called.
- * @param {MusicPlayer} manager
- */
-PlayableMusic.prototype.playFrame = function(manager) {
-    var frame = manager.playingFrame, time = manager.getTime(), i, curFrame;
-    i = (curFrame = this.timeFrames[frame]).onNotes.length;
-    while (i--) {
-        curFrame.onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
-    }
-    if (frame+1<this.timeFrames.length) {
-        manager.currentTimeout = setTimeout(function() {
-            manager.playingFrame++;
-            this.playFrame(manager);
-        }.bind(this), Math.max((this.timeFrames[frame+1].millis-manager.getTime())/manager.speed, 0));
-    } else {
-        manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
-    }
-};
-/**
- * With the help of a manager, play the music at a certain time.
- * However, if frames are delayed, no notes are to be skipped or shortened considerably.
- * @param {MusicPlayer} manager
- */
-PlayableMusic.prototype.playWithoutSkipping = function(manager) {
-    var time = manager.getTime(), frame = this.getFrame(time), i, curFrame;
-    manager.playingFrame = frame;
-    // start notes
-    if (frame<this.timeFrames.length) {
-        i = (curFrame = this.timeFrames[frame]).onNotes.length;
-        while (i--) {
-            curFrame.onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
-        }
-        i = curFrame.sustainNotes.length;
-        while (i--) {
-            curFrame.sustainNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
-        }
-        if (frame+1<this.timeFrames.length) {
-            manager.setTime(time);
-            manager.currentTimeout = setTimeout(function() {
-                manager.playingFrame++;
-                this.playFrameWithoutSkipping(manager);
-            }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
-        } else {
-            manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
-        }
-    } else {
-        manager.currentTimeout = setTimeout(manager.endSong, Math.max((this.length-time)/manager.speed, 0));
-    }
-};
-/**
- * With the help of a manager, play the music at a certain frame
- * However, if frames are delayed, no notes are to be skipped or shortened considerably.
- * This should not be normally called.
- * @param {MusicPlayer} manager
- */
-PlayableMusic.prototype.playFrameWithoutSkipping = function(manager) {
-    var frame = manager.playingFrame, time, i, curFrame;
-    i = (curFrame = this.timeFrames[frame]).onNotes.length;
-    time = curFrame.millis;
-    while (i--) {
-        curFrame.onNotes[i].startAt(manager.audioContext, manager.volumeNode, time, manager.speed);
-    }
-    if (frame+1<this.timeFrames.length) {
-        manager.setTime(time);
-        manager.currentTimeout = setTimeout(function() {
-            manager.playingFrame++;
-            this.playFrameWithoutSkipping(manager);
-        }.bind(this), Math.max((this.timeFrames[frame+1].millis-time)/manager.speed, 0));
-    } else {
-        manager.currentTimeout = setTimeout(manager.endSong.bind(manager), Math.max((this.length-time)/manager.speed, 0));
-    }
-};
-/**
- * With the help of a manager, stop the music now.
- * @param {MusicPlayer} manager
- */
-PlayableMusic.prototype.stop = function(manager) {
-    clearTimeout(manager.currentTimeout); // should be responsible for it.
-    var frame = manager.playingFrame, i, curFrame;
-    if (frame<this.timeFrames.length) {
-        // stop everything
-        i = (curFrame = this.timeFrames[frame]).onNotes.length;
-        while (i--) {
-            curFrame.onNotes[i].stop();
-        }
-        i = curFrame.sustainNotes.length;
-        while (i--) {
-            curFrame.sustainNotes[i].stop();
-        }
-    }
+PlayableMusic.prototype.toString = function() {
+    return "[Object PlayableMusic]";
 };
 /**
  * Constructs from ToneJS
  * @param {Object} data
  * @param {Object} info
  */
-PlayableMusic.constructFromToneJS = function(data, info) {
+var ToneJSPlayableMusic = PlayableMusic.constructFromToneJS = function(data, info) {
     info = info || {};
     this.title = info.title || "";
     this.minBPM = data.header.bpm;
@@ -969,13 +953,13 @@ PlayableMusic.constructFromToneJS = function(data, info) {
     this.arranger = info.arranger || this.composer;
     this.transcriber = info.transcriber || "";
     this.length = 0;
-    var noteConstructor = info.noteConstructor || PlayableTone;
-    var i = data.tracks.length;
-    var trackProtoNotes = [];
+    let noteConstructor = info.noteConstructor || PlayableTone;
+    let i = data.tracks.length;
+    let trackProtoNotes = [];
     while (i--) {
-        var notes = data.tracks[i].notes;
-        var j = notes.length;
-        var instrument = data.tracks[i].instrument;
+        let notes = data.tracks[i].notes;
+        let j = notes.length;
+        let instrument = data.tracks[i].instrument;
         while (j--) {
             if (notes[j].time || notes[j].midi || notes[j].duration) {
                 trackProtoNotes.push({
@@ -991,11 +975,11 @@ PlayableMusic.constructFromToneJS = function(data, info) {
     trackProtoNotes.sort(function(a, b) {
         return b.startTime-a.startTime;
     }); // sort backwards
-    var sustainedArray = [];
-    var lastSustained = -1;
+    let sustainedArray = [];
+    let lastSustained = -1;
     i = trackProtoNotes.length;
     while (i--) { // loop backwards
-        var note = trackProtoNotes[i];
+        let note = trackProtoNotes[i];
         if (this.timeFrames.length === 0 || this.timeFrames.back().millis != Math.round(note.startTime)) {
             this.timeFrames.push({
                 millis: Math.round(note.startTime), // round it
@@ -1006,82 +990,253 @@ PlayableMusic.constructFromToneJS = function(data, info) {
         // manage sustained notes
         if (lastSustained<this.timeFrames.back().millis) {
             lastSustained = this.timeFrames.back().millis;
-            var replaceSus = [];
-            var susNotes = this.timeFrames.back().sustainNotes;
-            var j = sustainedArray.length;
-            while (j--) {
-                // add to the sustain notes
-                if (sustainedArray[j].startTime+sustainedArray[j].length>lastSustained) {
-                    susNotes.push(sustainedArray[j]);
-                    // add to the next batch
-                    replaceSus.push(sustainedArray[j]);
-                }
-            }
-            sustainedArray = replaceSus;
+            let replaceSus = [];
+            sustainedArray = sustainedArray.filter(function(note) {
+                return note.startTime + note.length > lastSustained;
+            });
+            this.timeFrames.back().sustainNotes = sustainedArray.slice(0);
         }
-        note = new_(noteConstructor, [note]);
+        note = new noteConstructor(note);
         sustainedArray.push(note);
         this.timeFrames.back().onNotes.push(note);
         this.length = Math.max(this.length, note.startTime+note.length);
     }
 };
-/**
- * @return {String} "[Object PlayableMusic]"
- */
-PlayableMusic.prototype.toString = function() {
-    return "[Object PlayableMusic]";
-};
+
 PlayableMusic.constructFromToneJS.prototype = Object.create(PlayableMusic.prototype);
 
+
 /**
- * MusicPlayer manages the playing of PlayableMusic
- * It can store multiple PlayableMusic as a song selector.
+ * Need to differentiate the playable music based on type
+ * One unoptimised version for editing which edits the JSON format: Track
+ * a way that combines them: TrackGroup
+ * @TODO Some sort of
+ */
+
+/**
+ * A track of music to separate from other tracks so that post processing can be done, and that it updates its internal string representation.
+ * @TODO TrackEditor class ???
+ */
+var Track = function(data) {
+    this.minBPM = Infinity; this.maxBPM = 0;
+    this.timeFrames = [];
+    this.length = 0;
+    this.tuning = data.tuning || equalTemperament;
+    let defaultNoteConstructor = data.defaultNoteConstructor || data.noteConstructor || PlayableNote;
+    let mapping = data.noteMapping; // hashtable
+    let volumeChar = (data.volume && data.volume.characters) || {};
+    let volumeMap = (data.volume && data.volume.mapping) || {};
+    let EPSILON = 0.5;
+    let lexer = new NoteLexer(data.instrument.notes, volumeChar);
+    let curTrack = {
+        millis: 0,
+        bpm: 0, // 0 is default volume, volume exists outside the stack
+        volume: 0,
+        parseState: "bpm entry",
+        modifierStack: [{
+            timeMultiplier: 1,
+            octaveChange: 0,
+        }],
+    };
+    // array to store sustained notes.
+    let sustainedArray = [];
+    let lastSustained = -1;
+    while (1) {
+        if (!this.timeFrames.length || Math.floor(curTrack.millis)-this.timeFrames.back().millis>EPSILON) {
+            if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) { // pop last element (empty)
+                this.timeFrames.pop();
+            }
+            this.timeFrames.push({
+                millis: Math.round(curTrack.millis),
+                onNotes: [],
+                sustainNotes: []
+            }); // produce new time frame
+        }
+        if (lastSustained<this.timeFrames.back().millis) { // sustain notes
+            lastSustained = this.timeFrames.back().millis;
+            this.timeFrames.back().sustainNotes = sustainedArray = sustainedArray.filter(function(note) {
+                return note.startTime + note.length > lastSustained;
+            });
+        }
+        let noteConstructor = data.instruments[curTrack.instrumentIndex].noteConstructor || defaultNoteConstructor;
+        let noteBuffer = {
+            startTime: Math.round(curTrack.millis),
+            noteNumber: NaN, // store note number
+            frequency: 0,
+            length: 0,
+            volume: 1,
+            type: data.instruments[curTrack.instrumentIndex].type,
+            wave: data.instruments[curTrack.instrumentIndex].wave
+        };
+        let modifierBuffer = {
+            timeMultiplier: 1,
+            octaveChange: 0
+        };
+        let getToken = true;
+        while (getToken) {
+            let token = lexer.getNextToken();
+            if (!token) { getToken = false; break; }
+            switch (token.type) {
+                case "volume":
+                    curTrack.volume = token.value;
+                    break;
+                case "chordEnd":
+                    curTrack.millis += noteBuffer.length;
+                    getToken = false;
+                    continue;
+                case "octave":
+                    if (curTrack.parseState === "settings") modifierBuffer.octaveChange += token.value; else noteBuffer.noteNumber += token.value*12;
+                    break;
+                case "settings":
+                    if (token.value === "/") {
+                        curTrack.parseState = "settings";
+                    } else if (token.value === "[") {
+                        curTrack.modifierStack.push({
+                            timeMultiplier: curTrack.modifierStack.back().timeMultiplier*modifierBuffer.timeMultiplier,
+                            octaveChange: curTrack.modifierStack.back().octaveChange+modifierBuffer.octaveChange,
+                        });
+                        modifierBuffer.timeMultiplier = 1;
+                        modifierBuffer.octaveChange = 0;
+                        curTrack.parseState = "note entry";
+                    } else { // "]"
+                        curTrack.modifierStack.pop();
+                    }
+                    break;
+                case "section":
+                    if (token.value === ")") {
+                        curTrack.parseState = "bpm entry";
+                        curTrack.millis += noteBuffer.length;
+                        getToken = false;
+                    } else { // "("
+                        curTrack.parseState = "note entry";
+                    }
+                    break;
+                case "number":
+                    if (curTrack.parseState === "bpm entry") {
+                        curTrack.bpm = token.value;
+                        this.minBPM = Math.min(this.minBPM, curTrack.bpm);
+                        this.maxBPM = Math.max(this.maxBPM, curTrack.bpm);
+                    } else if (curTrack.parseState === "settings") {
+                        modifierBuffer.timeMultiplier *= token.value;
+                    } else { // note entry
+                        noteBuffer.length = token.value / curTrack.modifierStack.back().timeMultiplier * (60000 / curTrack.bpm);
+                        if (this.tuning[noteBuffer.noteNumber]) { // create note
+                            noteBuffer.frequency = this.tuning[noteBuffer.noteNumber]*Math.pow(2, curTrack.modifierStack.back().octaveChange);
+                            noteBuffer.volume = volumeMap[curTrack.volume] || 1;
+                            let newNote = new noteConstructor(noteBuffer);
+                            this.timeFrames.back().onNotes.push(newNote);
+                            sustainedArray.push(newNote);
+                            this.length = Math.max(this.length, curTrack.millis+newNote.length); // update length of song
+                            noteBuffer.noteNumber = NaN; // ensure nothing gets played
+                        }
+                    }
+                    break;
+                case "note":
+                    noteBuffer.noteNumber = mapping[token.value] || NaN;
+                    break;
+            }
+        }
+        if (lexer.position >= lexer.source.length) break; // no more input
+    }
+    if (this.timeFrames.length && !this.timeFrames.back().onNotes.length) this.timeFrames.pop(); // remove empty last timeframe
+};
+Track.prototype = Object.create(PlayableMusic.prototype);
+/**
+ * Extract a section as a copy.
+ * @param {Number} start start time in milliseconds
+ * @param {Number} stop stop time in milliseconds
+ * @param {Object} options
+ * options.includePreviousNotes: default true
+ * options.stopAtStopTime: default true
+ * @return {Track} A track which 
+ */
+Track.prototype.section = function(start, stop, options) {
+    options = options || {};
+    //
+};
+/**
+ * Pitchshift?
+ * @TODO
+ */
+Track.prototype.pitchShift = function() {
+    //
+};
+/**
+ * @return {String} "[Object Track]"
+ */
+Track.prototype.toString = function() {
+    return "[Object Track]";
+};
+
+/**
+ * Make playable tracks, then combine them, as well as allow editing
+ * Needs a custom play function, not like PlayableMixin.
+ * @TODO
+ */
+var TrackGroup = function(tracks) {
+    //
+};
+/**
+ * Extract a section as a copy.
+ * @param {Number} start start time in milliseconds
+ * @param {Number} stop stop time in milliseconds
+ * @param {Object} options
+ * options.includePreviousNotes: default true
+ * options.stopAtStopTime: default true
+ * @return {TrackGroup} extracted tracks 
+ * @TODO
+ */
+TrackGroup.prototype.section = function(start, stop, options) {
+    options = options || {};
+    //
+};
+TrackGroup.prototype.addTrack = function(track, offset) {
+    //
+};
+TrackGroup.prototype.addTrackGroup = function(track, offset) {
+    //
+};
+/**
+ * This stores multiple PlayableMusic instances and works as a song selector.
  * @param {PlayableMusic[]} songData
  */
-var MusicPlayer = function(songData) {
+var Playlist = function(songData) {
     this.data = songData || []; // store song data as array of playable music
     this.songIndex = 0; // decided to select 0 by default
-    this.playing = false;
-    this.time = 0;
-    this.startTime = 0;
-    this.currentTimeout = undefined;
-    this.audioContext = AudioContextManager.getAudioContext();
-    this.loop = false;
-    this.playAll = false;
-    this.volume = 1; // volume multiplier
-    this.playingFrame = 0;
-    this.pitchShift = 0; // pitch shift (cents)
-    this.speed = 1; // speed multiplier
     this.callbacks = {}; // manage callbacks in hash
-    this.inSong = false;
-    this.playLaterTimeout = undefined;
-    // If it lags, do we skip notes?
-    this.skipWhenLag = true;
 };
 /**
  * Bind a callback to call when an event happens.
- * The callback can accept 2 parameters: data and this (MusicPlayer instance)
- * "play"
- * "pause"
- * "loop"
+ * The callback can accept 2 parameters: data and this (Playlist instance)
  * "listupdate"
  * "songupdate"
- * "speedupdate"
- * "volumeupdate"
- * "songend"
- * @param {PlayableMusic} songData
+ * @param {Function} callback
  */
-MusicPlayer.prototype.on = function(event, callback) {
-    this.callbacks[event] = callback;
+Playlist.prototype.on = function(event, callback) {
+    if (typeof event === "string") {
+        this.callbacks[event] = callback;
+    } else {
+        let i = event.length;
+        while (i--) {
+            this.callbacks[event[i]] = callback;
+        }
+    }
 };
-MusicPlayer.prototype.off = function(event) {
-    delete this.callbacks[event];
+Playlist.prototype.off = function(event) {
+    if (typeof event === "string") {
+        delete this.callbacks[event];
+    } else {
+        let i = event.length;
+        while (i--) {
+            delete this.callbacks[event[i]];
+        }
+    }
 };
 /**
  * Add a song to the current songs.
  * @param {PlayableMusic} songData
  */
-MusicPlayer.prototype.addSong = function(songData) {
+Playlist.prototype.addSong = function(songData) {
     this.data.push(songData);
     this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
 };
@@ -1089,9 +1244,233 @@ MusicPlayer.prototype.addSong = function(songData) {
  * Add an array of songs to the current songs.
  * @param {PlayableMusic} songData
  */
-MusicPlayer.prototype.addSongs = function(songData) {
+Playlist.prototype.addSongs = function(songData) {
     this.data = this.data.concat(songData);
     this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
+};
+/**
+ * Select a song.
+ * On failure, this.songIndex is -1.
+ * On success, this.songIndex selects the song.
+ * @param {Number|String} selector title of song or index
+ */
+Playlist.prototype.select = function(selector) {
+    if (typeof selector === "number") {
+        if (this.data.length === 0) {
+            this.songIndex = -1;
+        } else {
+            this.songIndex = (Math.floor(selector)%this.data.length+this.data.length)%this.data.length;
+        }
+    } else if (typeof selector === "string") {
+        this.songIndex = -1;
+        let i = this.data.length;
+        while (i--) {
+            if (this.data[i].title === selector) {
+                this.songIndex = i;
+                break;
+            }
+        }
+    }
+    this.callbacks.songchange && this.callbacks.songchange(this.songIndex, this);
+};
+/**
+ * Naively shuffles all the songs
+ * Use only if you want a real random shuffle.
+ */
+Playlist.prototype.naiveShuffle = function() {
+    for (let i = this.data.length;i>0;i--) {
+        let index = Math.min(Math.floor(Math.random() * i), i-1);
+        let temp = this.data[index];
+        this.data[index] = this.data[i-1];
+        this.data[i-1] = temp;
+    }
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
+};
+Playlist.prototype.next = function() {
+    this.songIndex = (this.songIndex+1)%this.data.length;
+    this.callbacks.songchange && this.callbacks.songchange(this.songIndex, this);
+};
+/**
+ * Sorts the songs based off a function
+ * @param {sortFunc} a function to sort by.
+ */
+Playlist.prototype.sort = function(sortFunc) {
+    this.data.sort(sortFunc);
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
+};
+/**
+ * Smartly shuffles all the songs
+ * Used when you hate naive shuffles.
+ */
+Playlist.prototype.smartShuffle = function() {
+    let wasPlaying = this.playing, i;
+    if (this.playing) {
+        this.pause();
+    }
+    // group the songs by arranger
+    let map = new Map(), arr = []; // temporary array
+    i = this.data.length;
+    while (i--) {
+        if (!map.has(this.data[i].arranger)) {
+            map.set(this.data[i].arranger, []);
+        }
+        map.get(this.data[i].arranger).push(this.data[i]);
+    }
+    // for each song, give a random value
+    map.forEach(function(value) {
+        value.shuffle();
+        for (let i=0;i<value.length;i++) {
+            arr.push({song: value[i], rand: (i+Math.random())/value.length});
+        }
+    });
+    // sort
+    arr.sort(function(a, b) { return a.rand-b.rand; });
+    i = arr.length;
+    while (i--) {
+        this.data[i] = arr[i].song;
+    }
+    this.select(0); // reset selection
+    if (wasPlaying) {
+        this.play();
+    }
+    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
+};
+/**
+ * Get the titles of all the songs.
+ * Helps with selecting the song.
+ * @param {Function} sortFunc a function to sort the titles by
+ * @return {String[]} array of titles
+ */
+Playlist.prototype.getTitles = function(sortFunc) {
+    this.titles = [];
+    for (let i=0;i<this.data.length;i++) {
+        this.titles.push(this.data[i].title);
+    }
+    if (sortFunc) {
+        this.titles.sort(sortFunc);
+    }
+    return this.titles; // array of titles
+};
+/**
+ * Get the data of the current song.
+ * @return {Object} data
+ */
+Playlist.prototype.getCurrentSongData = function() {
+    if (this.songIndex === -1) {
+        return {
+            title: "[No song selected]",
+            composer: "",
+            arranger: "",
+            transcriber: "",
+            duration: 0, // seconds
+            bpm: {
+                min: 0,
+                max: 0
+            }
+        };
+    }
+    return {
+        title: this.data[this.songIndex].title,
+        composer: this.data[this.songIndex].composer,
+        arranger: this.data[this.songIndex].arranger,
+        transcriber: this.data[this.songIndex].transcriber,
+        duration: Math.round(this.data[this.songIndex].length)/1000, // seconds
+        bpm: {
+            min: this.data[this.songIndex].minBPM,
+            max: this.data[this.songIndex].maxBPM
+        }
+    };
+};
+/**
+ * Gets the current song.
+ */
+Playlist.prototype.currentSong = function() {
+    return this.data[this.songIndex];
+};
+/**
+ * @return {String} "[Object Playlist]"
+ */
+Playlist.prototype.toString = function() {
+    return "[Object Playlist]";
+};
+/**
+ * MusicPlayer manages the playing of PlayableMusic
+ * It can store multiple PlayableMusic as a song selector.
+ * @param {PlayableMusic[], Playlist, PlayableMixin} songData
+ */
+var MusicPlayer = function(songData) {
+    // Playlist
+    if (songData instanceof Playlist) {
+        this.playlist = songData;
+    } else if (Array.isArray(songData)) {
+        this.playlist = new Playlist(songData);
+    } else if (songData) {
+        this.playlist = new Playlist([songData]);
+    } else {
+        this.playlist = new Playlist([]);
+    }
+    // If it lags, do we skip notes?
+    this.skipWhenLag = true;
+    this.loop = false;
+    this.playAll = false;
+    // Recommend to be left as read-only
+    this.playing = false;
+    this.time = 0;
+    this.startTime = 0;
+    this.currentTimeout = undefined;
+    this.audioContext = AudioContextManager.getAudioContext();
+    this.volume = 1; // volume multiplier
+    this.destination = null; // volume node
+    this.playingData = 0;
+    this.speed = 1; // speed multiplier
+    this.callbacks = {}; // manage callbacks in hash
+    this.inSong = false;
+    this.playLaterTimeout = undefined;
+};
+/**
+ * Bind a callback to call when an event happens.
+ * The callback can accept 2 parameters: data and this (MusicPlayer instance)
+ * "play"
+ * "pause"
+ * "loop"
+ * "speedupdate"
+ * "volumeupdate"
+ * "songend"
+ * @param {Function} callback
+ */
+MusicPlayer.prototype.on = function(event, callback) {
+    if (typeof event === "string") {
+        this.callbacks[event] = callback;
+    } else {
+        let i = event.length;
+        while (i--) {
+            this.callbacks[event[i]] = callback;
+        }
+    }
+};
+MusicPlayer.prototype.off = function(event) {
+    if (typeof event === "string") {
+        delete this.callbacks[event];
+    } else {
+        let i = event.length;
+        while (i--) {
+            delete this.callbacks[event[i]];
+        }
+    }
+};
+/**
+ * Add a song to the current songs.
+ * @param {PlayableMusic} songData
+ */
+MusicPlayer.prototype.addSong = function(songData) {
+    this.playlist.addSong(songData);
+};
+/**
+ * Add an array of songs to the current songs.
+ * @param {PlayableMusic} songData
+ */
+MusicPlayer.prototype.addSongs = function(songData) {
+    this.playlist.addSongs(songData);
 };
 /**
  * Set if the song should loop
@@ -1110,29 +1489,30 @@ MusicPlayer.prototype.setPlayAll = function(playAll) {
 /**
  * MusicPlayer version number.
  */
-MusicPlayer.version = "3.0.0b2";
+MusicPlayer.version = "3.0.0b7";
 
 /**
  * Plays the selected song at time this.time.
  */
 MusicPlayer.prototype.play = function() {
-    if (!this.playing && 0 <= this.songIndex && this.songIndex < this.data.length) {
-        this.volumeNode = this.audioContext.createGain();
-        this.volumeNode.connect(this.audioContext.destination);
-        this.volumeNode.gain.value = this.volume;
+    let currentSong = this.playlist.currentSong();
+    if (!this.playing && currentSong) {
+        this.destination = this.audioContext.createGain();
+        this.destination.connect(this.audioContext.destination);
+        this.destination.gain.setTargetAtTime(this.volume, this.audioContext.currentTime, 0);
         // play
         this.playing = true;
         this.inSong = true;
-        if (this.time>=this.data[this.songIndex].length) {
+        if (this.time>=currentSong.length) {
             this.time = 0;
         }
         this.startTime = Date.now();
         if (this.skipWhenLag) {
-            this.data[this.songIndex].play(this);
+            currentSong.play(this);
         } else {
-            this.data[this.songIndex].playWithoutSkipping(this);
+            currentSong.playWithoutSkipping(this);
         }
-        this.callbacks.play && this.callbacks.play(this.data[this.songIndex], this);
+        this.callbacks.play && this.callbacks.play(currentSong, this);
     }
 };
 /**
@@ -1140,13 +1520,15 @@ MusicPlayer.prototype.play = function() {
  * @param {Number} millis milliseconds to wait
  */
 MusicPlayer.prototype.playLater = function(millis) {
-    if (!this.playing && 0 <= this.songIndex && this.songIndex < this.data.length) {
+    let currentSong = this.playlist.currentSong();
+    if (!this.playing && currentSong) {
         // play
         this.playing = true;
         this.inSong = true;
         this.time = -millis*this.speed;
         this.startTime = Date.now();
-        this.playLaterTimeout = setTimeout(this.start.bind(this), millis);
+        this.playLaterTimeout = setTimeout(this.play.bind(this), millis);
+        return this.playLaterTimeout;
     }
 };
 /**
@@ -1155,18 +1537,8 @@ MusicPlayer.prototype.playLater = function(millis) {
  */
 MusicPlayer.prototype.setVolume = function(volume) {
     this.volume = (+volume);
-    if (this.playing && this.audioContext) {
-        this.volumeNode = this.audioContext.createGain();
-        this.volumeNode.connect(this.audioContext.destination);
-        this.volumeNode.gain.value = this.volume;
-        var tempPlay = this.callbacks.play; // store
-        var tempPause = this.callbacks.pause; // store
-        this.callbacks.play = undefined;
-        this.callbacks.pause = undefined;
-        this.pause();
-        this.play();
-        if (tempPlay) this.callbacks.play = tempPlay;
-        if (tempPause) this.callbacks.pause = tempPause;
+    if (this.destination) {
+        this.destination.gain.setTargetAtTime(this.volume, this.audioContext.currentTime, 0);
     }
     this.callbacks.volumeupdate && this.callbacks.volumeupdate(this.volume, this);
 };
@@ -1176,9 +1548,15 @@ MusicPlayer.prototype.setVolume = function(volume) {
  */
 MusicPlayer.prototype.setSpeed = function(speed) {
     if (this.playing && this.audioContext) {
+        let tempPlay = this.callbacks.play; // store
+        let tempPause = this.callbacks.pause; // store
+        this.callbacks.play = undefined;
+        this.callbacks.pause = undefined;
         this.pause();
         this.speed = (+speed);
         this.play();
+        this.callbacks.play = tempPlay;
+        this.callbacks.pause = tempPause;
     } else {
         this.speed = (+speed);
     }
@@ -1189,25 +1567,25 @@ MusicPlayer.prototype.setSpeed = function(speed) {
  * Used by the song to tell the instance of MusicPlayer that it ended.
  */
 MusicPlayer.prototype.endSong = function() {
+    let currentSong = this.playlist.currentSong();
     if (this.playing) {
         this.playing = false;
         this.startTime = Date.now();
-        this.time = this.data[this.songIndex].length;
+        this.time = currentSong.length;
         this.inSong = false;
         if (this.playAll) {
-            this.songIndex++;
+            this.playlist.next();
             this.time = 0;
-            if (this.songIndex === this.data.length) {
-                this.songIndex = this.loop?0:-1;
-                this.loop && this.callbacks.loop && this.callbacks.loop(this.songindex, this);
+            if (this.playlist.songIndex === 0) {
+                this.loop && this.callbacks.loop && this.callbacks.loop(this.playlist.currentSong(), this);
             }
-            this.callbacks.songend && this.callbacks.songend(this.songindex, this);
-            this.play();
+            this.callbacks.songend && this.callbacks.songend(currentSong, this);
+            if (this.loop) this.play();
         } else if (this.loop) {
-            this.callbacks.loop && this.callbacks.loop(this.songindex, this);
+            this.callbacks.loop && this.callbacks.loop(currentSong, this);
             this.play(); // loop!
         } else {
-            this.callbacks.songend && this.callbacks.songend(this.songindex, this);
+            this.callbacks.songend && this.callbacks.songend(currentSong, this);
         }
     }
 };
@@ -1217,6 +1595,7 @@ MusicPlayer.prototype.endSong = function() {
  * from this point when .play is called.
  */
 MusicPlayer.prototype.pause = function() {
+    let currentSong = this.playlist.currentSong();
     if (this.playing) {
         if (this.playLaterTimeout !== undefined) {
             clearTimeout(this.playLaterTimeout);
@@ -1224,17 +1603,22 @@ MusicPlayer.prototype.pause = function() {
         }
         this.playing = false;
         this.time += (Date.now()-this.startTime)*this.speed;
-        this.data[this.songIndex].stop(this); // this helps it stop
+        currentSong.stop(this); // this helps it stop
         this.callbacks.pause && this.callbacks.pause();
     }
 };
 /**
  * Set the point the song should be at.
- * No song should be playing when this function is called.
  * @param {Number} time
  */
 MusicPlayer.prototype.seek = function(time) {
-    this.time = time*1000;
+    if (this.playing) {
+        this.pause();
+        this.time = time*1000;
+        this.play();
+    } else {
+        this.time = time*1000;
+    }
 };
 /**
  * Select a song.
@@ -1243,84 +1627,32 @@ MusicPlayer.prototype.seek = function(time) {
  * @param {Number|String} selector title of song or index
  */
 MusicPlayer.prototype.select = function(selector) {
-    if (typeof selector === "number") {
-        if (selector === -1) {
-            this.songIndex = -1;
-        } else {
-            // use index
-            this.songIndex = (Math.floor(selector)%this.data.length+this.data.length)%this.data.length;
-        }
-    } else if (typeof selector === "string") {
-        this.songIndex = -1;
-        var i = this.data.length;
-        while (i--) {
-            if (this.data[i].title === selector) {
-                this.songIndex = i;
-                break;
-            }
-        }
-    }
+    this.playlist.select(selector);
     this.time = 0;
-    this.callbacks.songchange && this.callbacks.songchange(this.songIndex, this);
 };
 /**
  * Naively shuffles all the songs
  * Use only if you want a real random shuffle.
  */
 MusicPlayer.prototype.naiveShuffle = function() {
-    for (var i = this.data.length;i>0;i--) {
-        var index = Math.floor(Math.random() * i);
-        var temp = this.data[index];
-        this.data[index] = this.data[i-1];
-        this.data[i-1] = temp;
-    }
-    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
+    this.playlist.naiveShuffle();
+    this.time = 0;
 };
 /**
  * Sorts the songs based off a function
  * @param {sortFunc} a function to sort by.
  */
 MusicPlayer.prototype.sort = function(sortFunc) {
-    this.data.sort(sortFunc);
-    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
+    this.playlist.sort(sortFunc);
+    this.time = 0;
 };
 /**
  * Smartly shuffles all the songs
  * Used when you hate naive shuffles.
  */
 MusicPlayer.prototype.smartShuffle = function() {
-    var wasPlaying = this.playing, i;
-    if (this.playing) {
-        this.pause();
-    }
-    // group the songs by arranger
-    var map = new Map(), arr = []; // temporary array
-    i = this.data.length;
-    while (i--) {
-        if (!map.has(this.data[i].arranger)) {
-            map.set(this.data[i].arranger, []);
-        }
-        map.get(this.data[i].arranger).push(this.data[i]);
-    }
-    // for each song, give a random value
-    map.forEach(function(value) {
-        value.shuffle();
-        for (var i=0;i<value.length;i++) {
-            arr.push({song: value[i], rand: (i+Math.random())/value.length});
-        }
-    });
-    // sort
-    arr.sort(function(a, b) { return a.rand-b.rand; });
-    i = arr.length;
-    while (i--) {
-        this.data[i] = arr[i].song;
-    }
-    this.select(0); // reset selection
-    this.time = 0; // reset time
-    if (wasPlaying) {
-        this.play();
-    }
-    this.callbacks.listupdate && this.callbacks.listupdate(this.data, this);
+    this.playlist.smartShuffle();
+    this.time = 0;
 };
 /**
  * Get the titles of all the songs.
@@ -1329,53 +1661,20 @@ MusicPlayer.prototype.smartShuffle = function() {
  * @return {String[]} array of titles
  */
 MusicPlayer.prototype.getTitles = function(sortFunc) {
-    this.titles = [];
-    for (var i=0;i<this.data.length;i++) {
-        this.titles.push(this.data[i].title);
-    }
-    if (sortFunc) {
-        this.titles.sort(sortFunc);
-    }
-    return this.titles; // array of titles
+    return this.playlist.getTitles(); // array of titles
 };
 /**
  * Get the data of the current song.
  * @return {Object} data
  */
 MusicPlayer.prototype.getCurrentSongData = function() {
-    if (this.songIndex === -1) {
-        return {
-            title: "[No song selected]",
-            composer: "",
-            arranger: "",
-            transcriber: "",
-            duration: 0, // seconds
-            bpm: {
-                min: 0,
-                max: 0
-            },
-            year: 0
-        };
-    }
-    return {
-        title: this.data[this.songIndex].title,
-        composer: this.data[this.songIndex].composer,
-        arranger: this.data[this.songIndex].arranger,
-        transcriber: this.data[this.songIndex].transcriber,
-        duration: Math.round(this.data[this.songIndex].length)/1000, // seconds
-        bpm: {
-            min: this.data[this.songIndex].minBPM,
-            max: this.data[this.songIndex].maxBPM
-        },
-        year: 0
-    };
+    return this.playlist.getCurrentSongData();
 };
 /**
  * Get the current time of the song. Used to calibrate PlayableMusic.
  * @return {Number} time
  */
 MusicPlayer.prototype.getTime = function() {
-    // Much oblivious
     return Math.round(this.time + (Date.now() - this.startTime)*this.speed);
 };
 /**
@@ -1383,7 +1682,6 @@ MusicPlayer.prototype.getTime = function() {
  * @return {Number} time
  */
 MusicPlayer.prototype.setTime = function(time) {
-    // Much oblivious
     this.time = time;
     this.startTime = Date.now();
 };
@@ -1398,15 +1696,16 @@ MusicPlayer.prototype.getTimeData = function() {
             duration: 0,
         };
     }
+    let currentSong = this.playlist.currentSong();
     if (this.playing) {
         return {
             currentTime: Math.round(this.time + (Date.now() - this.startTime)*this.speed)/1000,
-            duration: Math.round(this.data[this.songIndex].length)/1000,
+            duration: Math.round(currentSong.length)/1000,
         };
     } else {
         return {
             currentTime: Math.round(this.time)/1000,
-            duration: Math.round(this.data[this.songIndex].length)/1000,
+            duration: Math.round(currentSong.length)/1000,
         };
     }
 };
@@ -1416,18 +1715,3 @@ MusicPlayer.prototype.getTimeData = function() {
 MusicPlayer.prototype.toString = function() {
     return "[Object MusicPlayer]";
 };
-
-var module = {
-    Priority_Queue: Priority_Queue,
-    AudioContextManager: AudioContextManager,
-    Instruments: Instruments,
-    PlayableTone: PlayableTone,
-    PlayableNote: PlayableNote,
-    ShepardTone: ShepardTone,
-    PlayableMusic: PlayableMusic,
-    MusicPlayer: MusicPlayer
-};
-var export_module;
-if (export_module) {
-    export_module(module);
-}
